@@ -1,5 +1,14 @@
-let socket = io({ transports: ['websocket', 'polling'] });
+// =========================================================================
+// KONEKSI SOCKET.IO
+// =========================================================================
+let socket = io({ 
+  transports: ['websocket', 'polling'],
+  reconnection: true,
+  reconnectionAttempts: 10,
+  reconnectionDelay: 1000
+});
 
+// Variable Global WebRTC & UI State
 let peerConnections = {}; 
 let pendingCandidates = {}; 
 let localStream = null;
@@ -16,25 +25,32 @@ let isMicMuted = false;
 let isCamOff = false;
 
 // =========================================================================
-// KONFIGURASI STUN & TURN SERVER TERUJI UNTUK RAILWAY & SELULER INDONESIA
+// KONFIGURASI RTC (GOOGLE STUN + METERED TURN PRIVATE)
 // =========================================================================
 const rtcConfig = {
   iceServers: [
+    // STUN Server Publik Google
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun2.l.google.com:19302' },
     { urls: 'stun:stun3.l.google.com:19302' },
     { urls: 'stun:stun4.l.google.com:19302' },
-    { urls: 'stun:global.stun.twilio.com:3478' },
-    // TURN Server Relay Multi-Port (Sangat Handal untuk Telkomsel, Indosat, XL, Tri)
+
+    // TURN Server Pribadi Metered (Menghindari Layar Hitam di Jaringan Seluler)
     {
-      urls: [
-        "turn:openrelay.metered.ca:80",
-        "turn:openrelay.metered.ca:443",
-        "turn:openrelay.metered.ca:443?transport=tcp"
-      ],
-      username: "openrelayproject",
-      credential: "openrelayproject"
+      urls: "turn:global.relays.metered.ca:80",
+      username: "b6547ac0c823c059fad69fe9",
+      credential: "UU7TF5yHhpY9K8g2"
+    },
+    {
+      urls: "turn:global.relays.metered.ca:443",
+      username: "b6547ac0c823c059fad69fe9",
+      credential: "UU7TF5yHhpY9K8g2"
+    },
+    {
+      urls: "turn:global.relays.metered.ca:443?transport=tcp",
+      username: "b6547ac0c823c059fad69fe9",
+      credential: "UU7TF5yHhpY9K8g2"
     }
   ],
   iceTransportPolicy: 'all',
@@ -42,7 +58,9 @@ const rtcConfig = {
   rtcpMuxPolicy: 'require'
 };
 
-// AUTO CHECK SESSION
+// =========================================================================
+// AUTO CHECK SESSION & INITIALIZATION
+// =========================================================================
 window.addEventListener('DOMContentLoaded', () => {
   const savedUser = localStorage.getItem('app_username');
   if (savedUser) {
@@ -50,7 +68,7 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-// --- AUTHENTICATION & SESSION LOGIC ---
+// --- AUTENTIKASI ---
 function register() {
   const username = document.getElementById('authUsername').value.trim();
   const password = document.getElementById('authPassword').value.trim();
@@ -79,18 +97,7 @@ function handleCredentialResponse(response) {
 
 socket.on('register_response', (data) => {
   if (data.success) {
-    currentUsername = data.username;
-    localStorage.setItem('app_username', currentUsername);
-    document.getElementById('displayUsername').textContent = currentUsername;
-    document.getElementById('authSection').classList.add('hidden');
-
-    if (!data.profile.fullName || !data.profile.age) {
-      document.getElementById('profileSection').classList.remove('hidden');
-    } else {
-      document.getElementById('mainSection').classList.remove('hidden');
-      socket.emit('get_user_list');
-    }
-    initWebRTCListeners();
+    handleLoginSuccess(data);
   } else {
     alert(data.message);
   }
@@ -98,23 +105,27 @@ socket.on('register_response', (data) => {
 
 socket.on('login_response', (data) => {
   if (data.success) {
-    currentUsername = data.username;
-    localStorage.setItem('app_username', currentUsername); 
-    document.getElementById('displayUsername').textContent = currentUsername;
-    document.getElementById('authSection').classList.add('hidden');
-
-    if (!data.profile.fullName || !data.profile.age) {
-      document.getElementById('profileSection').classList.remove('hidden');
-    } else {
-      document.getElementById('mainSection').classList.remove('hidden');
-      socket.emit('get_user_list');
-    }
-    initWebRTCListeners();
+    handleLoginSuccess(data);
   } else {
     localStorage.removeItem('app_username');
     if (!data.autoLogin) alert(data.message);
   }
 });
+
+function handleLoginSuccess(data) {
+  currentUsername = data.username;
+  localStorage.setItem('app_username', currentUsername);
+  document.getElementById('displayUsername').textContent = currentUsername;
+  document.getElementById('authSection').classList.add('hidden');
+
+  if (!data.profile || !data.profile.fullName || !data.profile.age) {
+    document.getElementById('profileSection').classList.remove('hidden');
+  } else {
+    document.getElementById('mainSection').classList.remove('hidden');
+    socket.emit('get_user_list');
+  }
+  initWebRTCListeners();
+}
 
 function logout() {
   localStorage.removeItem('app_username');
@@ -122,32 +133,35 @@ function logout() {
   location.reload();
 }
 
-// --- FOTO COMPRESSION ---
-document.getElementById('profPhotoInput').addEventListener('change', function(e) {
-  const file = e.target.files[0];
-  const statusDiv = document.getElementById('uploadStatus');
-  if (file) {
-    statusDiv.textContent = "Mengompres foto...";
-    const reader = new FileReader();
-    reader.onload = function(event) {
-      const img = new Image();
-      img.src = event.target.result;
-      img.onload = function() {
-        const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 300;
-        const scaleFactor = MAX_WIDTH / img.width;
-        canvas.width = MAX_WIDTH;
-        canvas.height = img.height * scaleFactor;
+// --- FOTO PROFIL & COMPRESSION ---
+const profPhotoInput = document.getElementById('profPhotoInput');
+if (profPhotoInput) {
+  profPhotoInput.addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    const statusDiv = document.getElementById('uploadStatus');
+    if (file) {
+      if (statusDiv) statusDiv.textContent = "Mengompres foto...";
+      const reader = new FileReader();
+      reader.onload = function(event) {
+        const img = new Image();
+        img.src = event.target.result;
+        img.onload = function() {
+          const canvas = document.createElement('canvas');
+          const MAX_WIDTH = 300;
+          const scaleFactor = MAX_WIDTH / img.width;
+          canvas.width = MAX_WIDTH;
+          canvas.height = img.height * scaleFactor;
 
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        photoBase64 = canvas.toDataURL('image/jpeg', 0.7);
-        statusDiv.textContent = "Foto siap!";
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          photoBase64 = canvas.toDataURL('image/jpeg', 0.7);
+          if (statusDiv) statusDiv.textContent = "Foto siap!";
+        };
       };
-    };
-    reader.readAsDataURL(file);
-  }
-});
+      reader.readAsDataURL(file);
+    }
+  });
+}
 
 function saveProfile() {
   const fullName = document.getElementById('profFullName').value.trim();
@@ -157,16 +171,20 @@ function saveProfile() {
   if (!fullName || !age || !birthYear) return alert('Lengkapi semua data!');
 
   const btn = document.getElementById('btnSaveProfile');
-  btn.disabled = true;
-  btn.textContent = "Menyimpan...";
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Menyimpan...";
+  }
 
   socket.emit('update_profile', { fullName, age, birthYear, photo: photoBase64 });
 }
 
 socket.on('profile_updated', (data) => {
   const btn = document.getElementById('btnSaveProfile');
-  btn.disabled = false;
-  btn.textContent = "Simpan & Lanjutkan";
+  if (btn) {
+    btn.disabled = false;
+    btn.textContent = "Simpan & Lanjutkan";
+  }
 
   if (data.success) {
     document.getElementById('profileSection').classList.add('hidden');
@@ -182,9 +200,10 @@ function editProfile() {
   document.getElementById('profileSection').classList.remove('hidden');
 }
 
-// --- ONLINE USER RENDER ---
+// --- USER ONLINE GRID ---
 socket.on('user_list_updated', (userList) => {
   const userGrid = document.getElementById('userGrid');
+  if (!userGrid) return;
   userGrid.innerHTML = '';
 
   userList.forEach(user => {
@@ -217,7 +236,7 @@ socket.on('user_list_updated', (userList) => {
   });
 });
 
-// --- CHAT SYSTEM ---
+// --- SYSTEM CHAT & PRIVAT DM ---
 function selectChatTarget(username, fullName) {
   targetChatUser = username;
   document.getElementById('chatHeader').textContent = `Obrolan Privat (DM) dengan: ${fullName}`;
@@ -253,6 +272,7 @@ socket.on('receive_chat', (data) => {
 });
 
 function appendMessage(text, isPrivate = false) {
+  if (!chatBox) return;
   const div = document.createElement('div');
   div.className = isPrivate ? 'msg msg-private' : 'msg';
   div.textContent = text;
@@ -260,10 +280,18 @@ function appendMessage(text, isPrivate = false) {
   chatBox.scrollTop = chatBox.scrollHeight;
 }
 
-// --- WEBRTC CORE (DILENGKAPI KELOLA CANDIDATE BUFFERING) ---
+// =========================================================================
+// WEBRTC SIGNALING & STREAMING MANAGEMENT
+// =========================================================================
 function initWebRTCListeners() {
+  socket.off('incoming_call');
+  socket.off('call_accepted');
+  socket.off('receive_ice_candidate');
+  socket.off('call_ended_by_peer');
+  socket.off('call_failed');
+
   socket.on('incoming_call', async (data) => {
-    const callerName = data.callerProfile.fullName || data.from;
+    const callerName = data.callerProfile?.fullName || data.from;
     const accept = confirm(`Panggilan video dari ${callerName}. Angkat?`);
     if (!accept) return;
 
@@ -271,23 +299,31 @@ function initWebRTCListeners() {
     activeCallUsers.add(data.from);
     socket.emit('get_user_list');
 
-    const pc = await createPeerConnection(data.from, callerName);
-    await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
-    
-    // Process Queued Candidates
-    await processPendingCandidates(data.from, pc);
+    try {
+      const pc = await createPeerConnection(data.from, callerName);
+      await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+      
+      // Proses ICE Candidates yang datang lebih awal
+      await processPendingCandidates(data.from, pc);
 
-    const answer = await pc.createAnswer();
-    await pc.setLocalDescription(answer);
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
 
-    socket.emit('answer_call', { to: data.from, answer: answer });
+      socket.emit('answer_call', { to: data.from, answer: answer });
+    } catch (err) {
+      console.error('Gagal memproses panggilan masuk:', err);
+    }
   });
 
   socket.on('call_accepted', async (data) => {
     const pc = peerConnections[data.from];
     if (pc) {
-      await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
-      await processPendingCandidates(data.from, pc);
+      try {
+        await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+        await processPendingCandidates(data.from, pc);
+      } catch (err) {
+        console.error('Gagal setRemoteDescription (answer):', err);
+      }
     }
   });
 
@@ -297,7 +333,7 @@ function initWebRTCListeners() {
       try {
         await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
       } catch (e) {
-        console.error('Gagal tambah candidate:', e);
+        console.error('Gagal menambahkan Candidate:', e);
       }
     } else {
       if (!pendingCandidates[data.from]) pendingCandidates[data.from] = [];
@@ -318,7 +354,7 @@ async function processPendingCandidates(username, pc) {
       try {
         await pc.addIceCandidate(new RTCIceCandidate(cand));
       } catch (e) {
-        console.error('Error pending candidate:', e);
+        console.error('Gagal memproses pending candidate:', e);
       }
     }
     delete pendingCandidates[username];
@@ -329,9 +365,9 @@ async function getLocalStream() {
   if (!localStream) {
     try {
       localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      localVideo.srcObject = localStream;
+      if (localVideo) localVideo.srcObject = localStream;
     } catch (err) {
-      alert('Gagal mengakses Kamera/Mikrofon! Izinkan akses perangkat.');
+      alert('Gagal mengakses Kamera/Mikrofon! Harap berikan izin akses.');
       throw err;
     }
   }
@@ -347,10 +383,10 @@ async function createPeerConnection(targetUser, displayName) {
   const pc = new RTCPeerConnection(rtcConfig);
   peerConnections[targetUser] = pc;
 
-  // Tambah audio & video track lokal
+  // Menambahkan Local Tracks
   stream.getTracks().forEach(track => pc.addTrack(track, stream));
 
-  // Tangkap stream lawan bicara
+  // Menangkap Remote Stream Lawan Bicara
   pc.ontrack = (event) => {
     let remoteStream = event.streams && event.streams[0];
     if (!remoteStream) {
@@ -367,8 +403,9 @@ async function createPeerConnection(targetUser, displayName) {
   };
 
   pc.oniceconnectionstatechange = () => {
-    console.log(`Status koneksi ICE (${targetUser}):`, pc.iceConnectionState);
+    console.log(`Status ICE (${targetUser}):`, pc.iceConnectionState);
     if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
+      console.warn('Percobaan sambung ulang ICE (Ice Restart)...');
       pc.restartIce();
     }
   };
@@ -381,11 +418,15 @@ async function startCallWith(username, fullName) {
   activeCallUsers.add(username);
   socket.emit('get_user_list');
 
-  const pc = await createPeerConnection(username, fullName);
-  const offer = await pc.createOffer();
-  await pc.setLocalDescription(offer);
+  try {
+    const pc = await createPeerConnection(username, fullName);
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
 
-  socket.emit('call_user', { userToCall: username, offer: offer });
+    socket.emit('call_user', { userToCall: username, offer: offer });
+  } catch (err) {
+    console.error('Gagal memulai panggilan:', err);
+  }
 }
 
 function addOrUpdateRemoteVideo(username, displayName, stream) {
@@ -408,7 +449,7 @@ function addOrUpdateRemoteVideo(username, displayName, stream) {
 
     card.appendChild(video);
     card.appendChild(label);
-    videoGrid.appendChild(card);
+    if (videoGrid) videoGrid.appendChild(card);
   } else {
     video = document.getElementById(`video-${username}`);
   }
@@ -416,12 +457,12 @@ function addOrUpdateRemoteVideo(username, displayName, stream) {
   if (video && video.srcObject !== stream) {
     video.srcObject = stream;
     
-    // Penanganan Autoplay Browser HP
+    // Penanganan Autoplay Browser HP (Mencegah Layar Hitam Karena Autoplay Blocked)
     const playPromise = video.play();
     if (playPromise !== undefined) {
       playPromise.catch(() => {
         video.muted = true;
-        video.play().catch(e => console.log("Gagal memutar video:", e));
+        video.play().catch(e => console.log("Gagal auto-play video:", e));
       });
     }
   }
@@ -443,6 +484,7 @@ function removePeerVideo(username) {
   socket.emit('get_user_list');
 }
 
+// --- KONTROL KAMERA & MIKROFON ---
 function toggleMic() {
   if (!localStream) return;
   const audioTrack = localStream.getAudioTracks()[0];
@@ -450,8 +492,10 @@ function toggleMic() {
     isMicMuted = !isMicMuted;
     audioTrack.enabled = !isMicMuted;
     const btn = document.getElementById('btnMuteMic');
-    btn.textContent = isMicMuted ? 'Unmute Mic' : 'Mute Mic';
-    btn.className = isMicMuted ? 'btn btn-danger' : 'btn btn-warning';
+    if (btn) {
+      btn.textContent = isMicMuted ? 'Unmute Mic' : 'Mute Mic';
+      btn.className = isMicMuted ? 'btn btn-danger' : 'btn btn-warning';
+    }
   }
 }
 
@@ -462,8 +506,10 @@ function toggleCam() {
     isCamOff = !isCamOff;
     videoTrack.enabled = !isCamOff;
     const btn = document.getElementById('btnMuteCam');
-    btn.textContent = isCamOff ? 'Nyalakan Kamera' : 'Matikan Kamera';
-    btn.className = isCamOff ? 'btn btn-danger' : 'btn btn-warning';
+    if (btn) {
+      btn.textContent = isCamOff ? 'Nyalakan Kamera' : 'Matikan Kamera';
+      btn.className = isCamOff ? 'btn btn-danger' : 'btn btn-warning';
+    }
   }
 }
 
@@ -475,10 +521,12 @@ function endCall() {
   peerConnections = {};
   activeCallUsers.clear();
   
-  const cards = videoGrid.querySelectorAll('.video-card');
-  cards.forEach(c => {
-    if (c.id !== 'card-local') c.remove();
-  });
+  if (videoGrid) {
+    const cards = videoGrid.querySelectorAll('.video-card');
+    cards.forEach(c => {
+      if (c.id !== 'card-local') c.remove();
+    });
+  }
 
   document.getElementById('callContainer').classList.add('hidden');
   socket.emit('get_user_list');
