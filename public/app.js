@@ -1,13 +1,12 @@
 let socket = io({ transports: ['websocket', 'polling'] });
 
-// Array Penampung Banyak Peer Connections (Grup Video Call)
-let peerConnections = {}; // { username: RTCPeerConnection }
-let pendingCandidates = {}; // { username: [candidates] }
+let peerConnections = {}; 
+let pendingCandidates = {}; 
 let localStream = null;
 let currentUsername = '';
 let targetChatUser = '';
 let photoBase64 = '';
-let activeCallUsers = new Set(); // Menyimpan siapa saja yang ada di panggilan
+let activeCallUsers = new Set(); 
 
 const localVideo = document.getElementById('localVideo');
 const videoGrid = document.getElementById('videoGrid');
@@ -16,34 +15,38 @@ const chatBox = document.getElementById('chat-box');
 let isMicMuted = false;
 let isCamOff = false;
 
-// Config STUN + TURN (Metered / OpenRelay Free Tier)
-// Diberikan relay server gratis agar bisa menembus beda jaringan/firewall seluler
+// KUNCI UTAMA: MULTI TURN & STUN SERVER UNTUK JARINGAN BEDA (SELULER / WI-FI)
 const rtcConfig = {
   iceServers: [
+    // STUN Servers
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun2.l.google.com:19302' },
-    { urls: 'stun:stun.metered.ca:80' },
+    { urls: 'stun:stun3.l.google.com:19302' },
+    { urls: 'stun:stun4.l.google.com:19302' },
+    { urls: 'stun:global.stun.twilio.com:3478' },
+    
+    // TURN Relay Servers (Penting untuk menembus Kuota Seluler vs Wi-Fi)
     {
       urls: 'turn:openrelay.metered.ca:80',
-      username: 'openrelay',
-      credential: 'openrelay'
+      username: 'openrelayproject',
+      credential: 'openrelayproject'
     },
     {
       urls: 'turn:openrelay.metered.ca:443',
-      username: 'openrelay',
-      credential: 'openrelay'
+      username: 'openrelayproject',
+      credential: 'openrelayproject'
     },
     {
       urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-      username: 'openrelay',
-      credential: 'openrelay'
+      username: 'openrelayproject',
+      credential: 'openrelayproject'
     }
   ],
   iceCandidatePoolSize: 10
 };
 
-// AUTO CHECK SESSION SAAT APLIKASI DIBUKA
+// AUTO CHECK SESSION
 window.addEventListener('DOMContentLoaded', () => {
   const savedUser = localStorage.getItem('app_username');
   if (savedUser) {
@@ -51,7 +54,7 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-// --- AUTHENTICATION & SESSION LOGIC ---
+// --- AUTENTIKASI ---
 function register() {
   const username = document.getElementById('authUsername').value.trim();
   const password = document.getElementById('authPassword').value.trim();
@@ -183,7 +186,7 @@ function editProfile() {
   document.getElementById('profileSection').classList.remove('hidden');
 }
 
-// --- ONLINE USER RENDER ---
+// --- ONLINE USERS ---
 socket.on('user_list_updated', (userList) => {
   const userGrid = document.getElementById('userGrid');
   userGrid.innerHTML = '';
@@ -206,7 +209,7 @@ socket.on('user_list_updated', (userList) => {
     }
 
     card.innerHTML = `
-      <img src="${user.photo}" alt="Foto ${user.fullName}">
+      <img src="${user.photo || 'https://via.placeholder.com/150'}" alt="Foto ${user.fullName}">
       <h4>${user.fullName}</h4>
       <p>Umur: ${user.age} Thn (${user.birthYear})</p>
       <div class="card-actions">
@@ -261,7 +264,7 @@ function appendMessage(text, isPrivate = false) {
   chatBox.scrollTop = chatBox.scrollHeight;
 }
 
-// --- WEBRTC GROUP & MULTI-PARTY CALL SYSTEM ---
+// --- WEBRTC SIGNALING & ENGINE ---
 function initWebRTCListeners() {
   socket.on('incoming_call', async (data) => {
     const callerName = data.callerProfile.fullName || data.from;
@@ -275,12 +278,10 @@ function initWebRTCListeners() {
     const pc = await createPeerConnection(data.from, callerName);
     await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
     
-    // Process buffering candidates
+    // Terapkan penampung ICE candidates jika terkumpul sebelum RemoteDescription
     if (pendingCandidates[data.from]) {
       for (let cand of pendingCandidates[data.from]) {
-        try {
-          await pc.addIceCandidate(new RTCIceCandidate(cand));
-        } catch(e) {}
+        try { await pc.addIceCandidate(new RTCIceCandidate(cand)); } catch(e){}
       }
       delete pendingCandidates[data.from];
     }
@@ -297,9 +298,7 @@ function initWebRTCListeners() {
       await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
       if (pendingCandidates[data.from]) {
         for (let cand of pendingCandidates[data.from]) {
-          try {
-            await pc.addIceCandidate(new RTCIceCandidate(cand));
-          } catch(e) {}
+          try { await pc.addIceCandidate(new RTCIceCandidate(cand)); } catch(e){}
         }
         delete pendingCandidates[data.from];
       }
@@ -330,10 +329,13 @@ function initWebRTCListeners() {
 async function getLocalStream() {
   if (!localStream) {
     try {
-      localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      localStream = await navigator.mediaDevices.getUserMedia({ 
+        video: { width: { ideal: 640 }, height: { ideal: 480 } }, 
+        audio: true 
+      });
       localVideo.srcObject = localStream;
     } catch (err) {
-      alert('Gagal mengakses Kamera/Mikrofon! Izinkan akses perangkat di browser Anda.');
+      alert('Gagal mengakses Kamera/Mikrofon! Izinkan akses perangkat.');
       throw err;
     }
   }
@@ -351,22 +353,19 @@ async function createPeerConnection(targetUser, displayName) {
 
   stream.getTracks().forEach(track => pc.addTrack(track, stream));
 
+  // Menangkap Aliran Video & Audio Lawan Bicara
   pc.ontrack = (event) => {
-    if (event.streams && event.streams[0]) {
-      addOrUpdateRemoteVideo(targetUser, displayName, event.streams[0]);
+    let remoteStream = event.streams && event.streams[0];
+    if (!remoteStream) {
+      remoteStream = new MediaStream();
+      remoteStream.addTrack(event.track);
     }
+    addOrUpdateRemoteVideo(targetUser, displayName, remoteStream);
   };
 
   pc.onicecandidate = (event) => {
     if (event.candidate) {
       socket.emit('send_ice_candidate', { to: targetUser, candidate: event.candidate });
-    }
-  };
-
-  // Auto retry jika ada perubahan koneksi jaringan
-  pc.oniceconnectionstatechange = () => {
-    if (pc.iceConnectionState === 'failed') {
-      pc.restartIce();
     }
   };
 
@@ -387,12 +386,14 @@ async function startCallWith(username, fullName) {
 
 function addOrUpdateRemoteVideo(username, displayName, stream) {
   let card = document.getElementById(`card-${username}`);
+  let video;
+
   if (!card) {
     card = document.createElement('div');
     card.className = 'video-card';
     card.id = `card-${username}`;
 
-    const video = document.createElement('video');
+    video = document.createElement('video');
     video.id = `video-${username}`;
     video.autoplay = true;
     video.playsInline = true;
@@ -404,15 +405,13 @@ function addOrUpdateRemoteVideo(username, displayName, stream) {
     card.appendChild(video);
     card.appendChild(label);
     videoGrid.appendChild(card);
-
-    video.srcObject = stream;
-    video.play().catch(e => console.log('Autoplay play error:', e));
   } else {
-    const video = document.getElementById(`video-${username}`);
-    if (video) {
-      video.srcObject = stream;
-      video.play().catch(e => console.log('Autoplay play error:', e));
-    }
+    video = document.getElementById(`video-${username}`);
+  }
+
+  if (video && video.srcObject !== stream) {
+    video.srcObject = stream;
+    video.play().catch(e => console.log('Autoplay error:', e));
   }
 }
 
