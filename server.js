@@ -9,7 +9,7 @@ const server = http.createServer(app);
 // Konfigurasi Socket.io
 const io = new Server(server, {
   cors: { origin: "*", methods: ["GET", "POST"] },
-  maxHttpBufferSize: 1e7 // Maksimal buffer 10MB
+  maxHttpBufferSize: 1e7 // Maksimal buffer 10MB untuk pengiriman data foto
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
@@ -119,7 +119,7 @@ io.on('connection', (socket) => {
     const senderName = (users[socket.username] && users[socket.username].fullName) ? users[socket.username].fullName : socket.username;
 
     if (to && connectedUsers[to]) {
-      // Private Message
+      // Private Message (DM)
       io.to(connectedUsers[to]).emit('receive_chat', {
         from: socket.username,
         senderName: senderName,
@@ -127,7 +127,7 @@ io.on('connection', (socket) => {
         isPrivate: true
       });
     } else {
-      // Global Broadcast
+      // Global Broadcast (Chat Publik)
       io.emit('receive_chat', {
         from: socket.username,
         senderName: senderName,
