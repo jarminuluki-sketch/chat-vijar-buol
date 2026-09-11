@@ -4,7 +4,7 @@ let peerConnection;
 let localStream;
 let currentUsername = '';
 let targetCallUser = '';
-let targetChatUser = '';
+let targetChatUser = ''; // Jika kosong, pesan dikirim ke Global Chat
 let photoBase64 = '';
 
 const localVideo = document.getElementById('localVideo');
@@ -14,14 +14,18 @@ const chatBox = document.getElementById('chat-box');
 let isMicMuted = false;
 let isCamOff = false;
 
+// STUN Server Lengkap untuk Mencegah Video Blank/Hitam
 const rtcConfig = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' }
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun3.l.google.com:19302' },
+    { urls: 'stun:stun4.l.google.com:19302' }
   ]
 };
 
-// --- AUTHENTICATION & GMAIL ---
+// --- AUTHENTICATION ---
 function register() {
   const username = document.getElementById('authUsername').value.trim();
   const password = document.getElementById('authPassword').value.trim();
@@ -42,10 +46,9 @@ function handleCredentialResponse(response) {
     const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
     const jsonPayload = decodeURIComponent(atob(base64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
     const profile = JSON.parse(jsonPayload);
-
     socket.emit('login_account', { isGoogle: true, googleProfile: profile });
   } catch (e) {
-    alert('Gagal memproses autentikasi Google.');
+    alert('Gagal autentikasi Google.');
   }
 }
 
@@ -75,38 +78,27 @@ socket.on('login_response', (data) => {
   }
 });
 
-// --- KOMPRESI OTOMATIS FOTO PROFIL (MAX 300px & JPEG 70%) ---
+// --- KOMPRESI FOTO AUTOMATIS ---
 document.getElementById('profPhotoInput').addEventListener('change', function(e) {
   const file = e.target.files[0];
   const statusDiv = document.getElementById('uploadStatus');
-  
   if (file) {
-    statusDiv.textContent = "Memproses & mengkompres foto...";
+    statusDiv.textContent = "Mengompres foto...";
     const reader = new FileReader();
-    
     reader.onload = function(event) {
       const img = new Image();
       img.src = event.target.result;
-      
       img.onload = function() {
         const canvas = document.createElement('canvas');
         const MAX_WIDTH = 300;
         const scaleFactor = MAX_WIDTH / img.width;
-        
         canvas.width = MAX_WIDTH;
         canvas.height = img.height * scaleFactor;
 
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-        // Kompres gambar menjadi sangat ringan (~20-40 KB)
         photoBase64 = canvas.toDataURL('image/jpeg', 0.7);
-        statusDiv.textContent = "Foto berhasil dikompres & siap di-upload!";
-      };
-      
-      img.onerror = function() {
-        alert("File gambar tidak valid!");
-        statusDiv.textContent = "";
+        statusDiv.textContent = "Foto siap!";
       };
     };
     reader.readAsDataURL(file);
@@ -118,9 +110,7 @@ function saveProfile() {
   const age = document.getElementById('profAge').value.trim();
   const birthYear = document.getElementById('profBirthYear').value.trim();
 
-  if (!fullName || !age || !birthYear) {
-    return alert('Harap isi Nama Lengkap, Umur, dan Tahun Lahir!');
-  }
+  if (!fullName || !age || !birthYear) return alert('Lengkapi semua data!');
 
   const btn = document.getElementById('btnSaveProfile');
   btn.disabled = true;
@@ -139,7 +129,7 @@ socket.on('profile_updated', (data) => {
     document.getElementById('mainSection').classList.remove('hidden');
     socket.emit('get_user_list');
   } else {
-    alert(data.message || 'Gagal memperbarui profil.');
+    alert(data.message || 'Gagal menyimpan profil.');
   }
 });
 
@@ -148,13 +138,13 @@ function editProfile() {
   document.getElementById('profileSection').classList.remove('hidden');
 }
 
-// --- USER GRID & INTERAKSI PANGGIL / CHAT ---
+// --- USER ONLINE GRID ---
 socket.on('user_list_updated', (userList) => {
   const userGrid = document.getElementById('userGrid');
   userGrid.innerHTML = '';
 
   userList.forEach(user => {
-    if (user.username === currentUsername) return; // Jangan tampilkan diri sendiri
+    if (user.username === currentUsername) return;
 
     const card = document.createElement('div');
     card.className = 'user-card';
@@ -164,18 +154,62 @@ socket.on('user_list_updated', (userList) => {
       <p>Umur: ${user.age} Thn (${user.birthYear})</p>
       <div class="card-actions">
         <button class="btn btn-success" style="font-size:11px; padding:6px 10px;" onclick="startCallWith('${user.username}', '${user.fullName}')">Panggil Video</button>
-        <button class="btn btn-primary" style="font-size:11px; padding:6px 10px;" onclick="selectChatTarget('${user.username}', '${user.fullName}')">Chat</button>
+        <button class="btn btn-primary" style="font-size:11px; padding:6px 10px;" onclick="selectChatTarget('${user.username}', '${user.fullName}')">Chat DM</button>
       </div>
     `;
     userGrid.appendChild(card);
   });
 });
 
-// --- LOGIKA WEBRTC 1-ON-1 (FACE TO FACE) ---
+// --- CHAT LOGIC (GLOBAL & DIRECT) ---
+function selectChatTarget(username, fullName) {
+  targetChatUser = username;
+  document.getElementById('chatHeader').textContent = `Obrolan Privat (DM) dengan: ${fullName}`;
+  document.getElementById('btnResetChatTarget').classList.remove('hidden');
+}
+
+function resetChatTarget() {
+  targetChatUser = '';
+  document.getElementById('chatHeader').textContent = `Obrolan Teks (Publik)`;
+  document.getElementById('btnResetChatTarget').classList.add('hidden');
+}
+
+function sendChatMessage() {
+  const msgInput = document.getElementById('msgInput');
+  const message = msgInput.value.trim();
+  if (!message) return;
+
+  socket.emit('send_chat', { to: targetChatUser, message: message });
+
+  if (targetChatUser) {
+    appendMessage(`Saya (Private ke ${targetChatUser}): ${message}`, true);
+  } else {
+    appendMessage(`Saya: ${message}`, false);
+  }
+
+  msgInput.value = '';
+}
+
+socket.on('receive_chat', (data) => {
+  if (data.from === currentUsername) return; // Mencegah duplikasi tampilan pesan sendiri
+
+  const prefix = data.isPrivate ? `[DM] ${data.senderName}` : data.senderName;
+  appendMessage(`${prefix}: ${data.message}`, data.isPrivate);
+});
+
+function appendMessage(text, isPrivate = false) {
+  const div = document.createElement('div');
+  div.className = isPrivate ? 'msg msg-private' : 'msg';
+  div.textContent = text;
+  chatBox.appendChild(div);
+  chatBox.scrollTop = chatBox.scrollHeight;
+}
+
+// --- WEBRTC 1-ON-1 LOGIC ---
 function initWebRTCListeners() {
   socket.on('incoming_call', async (data) => {
     const callerName = data.callerProfile.fullName || data.from;
-    const accept = confirm(`Panggilan video Face-to-Face dari ${callerName}. Angkat?`);
+    const accept = confirm(`Panggilan video dari ${callerName}. Angkat?`);
     if (!accept) return;
 
     targetCallUser = data.from;
@@ -202,18 +236,14 @@ function initWebRTCListeners() {
       try {
         await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
       } catch (e) {
-        console.error('ICE Candidate Error:', e);
+        console.error('ICE Candidate error:', e);
       }
     }
   });
 
   socket.on('call_ended_by_peer', () => {
-    alert('Panggilan telah diakhiri oleh lawan bicara.');
+    alert('Panggilan diakhiri oleh lawan bicara.');
     closeCallUI();
-  });
-
-  socket.on('receive_private_message', (data) => {
-    appendMessage(`${data.from}: ${data.message}`);
   });
 
   socket.on('call_failed', (data) => alert(data.message));
@@ -229,7 +259,7 @@ async function setupPeerConnection() {
       localVideo.srcObject = localStream;
     }
   } catch (err) {
-    alert('Gagal mengakses kamera/mikrofon!');
+    alert('Gagal mengaktifkan Kamera/Mikrofon! Pastikan izin lokasi/kamera diberikan di browser.');
     return;
   }
 
@@ -238,7 +268,7 @@ async function setupPeerConnection() {
   peerConnection.ontrack = (event) => {
     if (event.streams && event.streams[0]) {
       remoteVideo.srcObject = event.streams[0];
-      remoteVideo.play().catch(e => console.log('Autoplay blocked:', e));
+      remoteVideo.play().catch(e => console.log('Autoplay error:', e));
     }
   };
 
@@ -262,7 +292,6 @@ async function startCallWith(username, fullName) {
   socket.emit('call_user', { userToCall: username, offer: offer });
 }
 
-// KONTROL MIC, KAMERA & END CALL
 function toggleMic() {
   if (!localStream) return;
   const audioTrack = localStream.getAudioTracks()[0];
@@ -298,28 +327,4 @@ function closeCallUI() {
   if (peerConnection) peerConnection.close();
   document.getElementById('callContainer').classList.add('hidden');
   targetCallUser = '';
-}
-
-// CHAT 1-ON-1
-function selectChatTarget(username, fullName) {
-  targetChatUser = username;
-  document.getElementById('chatTargetHeader').textContent = `Obrolan Teks dengan: ${fullName}`;
-}
-
-function sendPrivateMessage() {
-  const msgInput = document.getElementById('msgInput');
-  if (!msgInput.value) return;
-  if (!targetChatUser) return alert('Klik tombol Chat pada salah satu kartu foto pengguna terlebih dahulu!');
-
-  socket.emit('send_private_message', { to: targetChatUser, message: msgInput.value });
-  appendMessage(`Saya -> ${targetChatUser}: ${msgInput.value}`);
-  msgInput.value = '';
-}
-
-function appendMessage(text) {
-  const div = document.createElement('div');
-  div.className = 'msg';
-  div.textContent = text;
-  chatBox.appendChild(div);
-  chatBox.scrollTop = chatBox.scrollHeight;
 }
