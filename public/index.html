@@ -3,8 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Aplikasi Video Call Face to Face</title>
-  <!-- Google Sign-In SDK -->
+  <title>Aplikasi Obrolan & Video Call</title>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
     * { box-sizing: border-box; font-family: Arial, sans-serif; }
@@ -19,8 +18,7 @@
     .btn-success { background-color: #28a745; }
     .btn-warning { background-color: #ffc107; color: #000; }
     .btn-danger { background-color: #dc3545; }
-    .btn:disabled { background-color: #ccc; cursor: not-allowed; }
-    
+
     /* Layout User Grid */
     .user-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 15px; margin: 15px 0; }
     .user-card { border: 1px solid #e0e0e0; border-radius: 8px; padding: 12px; text-align: center; background: #fff; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
@@ -29,7 +27,7 @@
     .user-card p { margin: 0; font-size: 12px; color: #666; }
     .card-actions { display: flex; justify-content: center; gap: 5px; margin-top: 10px; }
 
-    /* Video Call Overlay / Grid Face to Face */
+    /* Video Call Container */
     .f2f-video-container { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px; }
     @media (max-width: 600px) { .f2f-video-container { grid-template-columns: 1fr; } }
     .video-card { background: #000; border-radius: 10px; overflow: hidden; position: relative; aspect-ratio: 4 / 3; }
@@ -37,10 +35,10 @@
     .video-label { position: absolute; bottom: 10px; left: 10px; background: rgba(0,0,0,0.6); color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 12px; }
 
     /* Chat Area */
-    #chat-box { height: 150px; border: 1px solid #ddd; border-radius: 6px; overflow-y: auto; padding: 10px; background: #fafafa; margin-bottom: 10px; }
-    .msg { margin-bottom: 6px; word-break: break-all; }
+    #chat-box { height: 200px; border: 1px solid #ddd; border-radius: 6px; overflow-y: auto; padding: 10px; background: #fafafa; margin-bottom: 10px; }
+    .msg { margin-bottom: 8px; word-break: break-all; font-size: 14px; }
+    .msg-private { color: #d63384; font-weight: bold; }
     .controls-bar { display: flex; gap: 10px; justify-content: center; margin-bottom: 15px; padding: 10px; background: #eee; border-radius: 8px; }
-    .status-info { font-size: 12px; color: #28a745; font-weight: bold; margin-top: 5px; }
   </style>
 </head>
 <body>
@@ -48,7 +46,7 @@
 <div class="container">
   <h2>Aplikasi Obrolan & Panggilan Video (Face to Face)</h2>
 
-  <!-- SEKSI AUTH & REGISTRASI -->
+  <!-- SEKSI AUTH -->
   <div id="authSection">
     <h3>Masuk / Daftar Akun</h3>
     <div class="input-group">
@@ -60,20 +58,16 @@
       <input type="password" id="authPassword" placeholder="Masukkan password">
     </div>
     <button class="btn btn-primary" onclick="login()">Masuk (Login)</button>
-    <button class="btn btn-secondary" onclick="register()">Daftar Akun Baru</button>
+    <button class="btn btn-secondary" onclick="register()">Daftar Baru</button>
     
     <hr style="margin: 20px 0;">
-    <p style="text-align: center; color: #666;">Atau masuk langsung menggunakan Google:</p>
     <div style="display: flex; justify-content: center;">
-      <div id="g_id_onload"
-           data-client_id="YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com"
-           data-callback="handleCredentialResponse">
-      </div>
+      <div id="g_id_onload" data-client_id="YOUR_GOOGLE_CLIENT_ID" data-callback="handleCredentialResponse"></div>
       <div class="g_id_signin" data-type="standard"></div>
     </div>
   </div>
 
-  <!-- SEKSI FORM PROFIL (NAMA, UMUR, TAHUN LAHIR, FOTO) -->
+  <!-- SEKSI PROFIL -->
   <div id="profileSection" class="hidden">
     <h3>Lengkapi Data Profil</h3>
     <div class="input-group">
@@ -86,24 +80,24 @@
     </div>
     <div class="input-group">
       <label>Tahun Lahir</label>
-      <input type="number" id="profBirthYear" placeholder="Contoh: 2001">
+      <input type="number" id="profBirthYear" placeholder="Contoh: 1998">
     </div>
     <div class="input-group">
       <label>Upload Foto Profil</label>
       <input type="file" id="profPhotoInput" accept="image/*">
-      <div id="uploadStatus" class="status-info"></div>
+      <div id="uploadStatus" style="font-size: 12px; color: green; margin-top: 4px;"></div>
     </div>
     <button id="btnSaveProfile" class="btn btn-success" onclick="saveProfile()">Simpan & Lanjutkan</button>
   </div>
 
-  <!-- SEKSI UTAMA (DAFTAR USER, CHAT & CALL FACE TO FACE) -->
+  <!-- SEKSI UTAMA -->
   <div id="mainSection" class="hidden">
     <div style="display: flex; justify-content: space-between; align-items: center;">
       <p>Halo, <b id="displayUsername" style="color: #007bff;"></b></p>
       <button class="btn btn-secondary" onclick="editProfile()">Edit Profil</button>
     </div>
 
-    <!-- TAMPILAN PANGGILAN FACE TO FACE (JIKA CALL AKTIF) -->
+    <!-- PANGGILAN VIDEO -->
     <div id="callContainer" class="hidden">
       <div class="controls-bar">
         <button id="btnMuteMic" class="btn btn-warning" onclick="toggleMic()">Mute Mic</button>
@@ -123,16 +117,19 @@
       </div>
     </div>
 
-    <!-- DAFTAR USER AKTIF (KLIK FOTO UNTUK CALL/CHAT) -->
+    <!-- USER ONLINE -->
     <h3>Daftar Pengguna Online</h3>
     <div id="userGrid" class="user-grid"></div>
 
-    <!-- CHAT BOX 1-ON-1 -->
-    <h3 id="chatTargetHeader">Obrolan Teks</h3>
+    <!-- CHAT -->
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <h3 id="chatHeader">Obrolan Teks (Publik)</h3>
+      <button id="btnResetChatTarget" class="btn btn-secondary hidden" style="font-size: 11px;" onclick="resetChatTarget()">Kirim ke Semua (Publik)</button>
+    </div>
     <div id="chat-box"></div>
     <div class="input-group" style="display: flex; gap: 10px;">
-      <input type="text" id="msgInput" placeholder="Tulis pesan..." onkeypress="if(event.key==='Enter') sendPrivateMessage()">
-      <button class="btn btn-primary" onclick="sendPrivateMessage()">Kirim</button>
+      <input type="text" id="msgInput" placeholder="Ketik pesan..." onkeypress="if(event.key==='Enter') sendChatMessage()">
+      <button class="btn btn-primary" onclick="sendChatMessage()">Kirim</button>
     </div>
   </div>
 </div>
