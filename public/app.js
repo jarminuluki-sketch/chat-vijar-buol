@@ -16,16 +16,31 @@ const chatBox = document.getElementById('chat-box');
 let isMicMuted = false;
 let isCamOff = false;
 
-// Konfigurasi STUN + TURN publik untuk menembus jaringan seluler/NAT yang ketat
+// Config STUN + TURN (Metered / OpenRelay Free Tier)
+// Diberikan relay server gratis agar bisa menembus beda jaringan/firewall seluler
 const rtcConfig = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun2.l.google.com:19302' },
-    { urls: 'stun:stun3.l.google.com:19302' },
-    { urls: 'stun:stun4.l.google.com:19302' },
-    { urls: 'stun:global.stun.twilio.com:3478' }
-  ]
+    { urls: 'stun:stun.metered.ca:80' },
+    {
+      urls: 'turn:openrelay.metered.ca:80',
+      username: 'openrelay',
+      credential: 'openrelay'
+    },
+    {
+      urls: 'turn:openrelay.metered.ca:443',
+      username: 'openrelay',
+      credential: 'openrelay'
+    },
+    {
+      urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+      username: 'openrelay',
+      credential: 'openrelay'
+    }
+  ],
+  iceCandidatePoolSize: 10
 };
 
 // AUTO CHECK SESSION SAAT APLIKASI DIBUKA
@@ -70,7 +85,6 @@ socket.on('register_response', (data) => {
     document.getElementById('displayUsername').textContent = currentUsername;
     document.getElementById('authSection').classList.add('hidden');
 
-    // Jika belum ada profil, minta lengkapi profil, jika sudah langsung ke halaman utama
     if (!data.profile.fullName || !data.profile.age) {
       document.getElementById('profileSection').classList.remove('hidden');
     } else {
@@ -86,7 +100,7 @@ socket.on('register_response', (data) => {
 socket.on('login_response', (data) => {
   if (data.success) {
     currentUsername = data.username;
-    localStorage.setItem('app_username', currentUsername); // Simpan sesi login
+    localStorage.setItem('app_username', currentUsername);
     document.getElementById('displayUsername').textContent = currentUsername;
     document.getElementById('authSection').classList.add('hidden');
 
@@ -180,7 +194,6 @@ socket.on('user_list_updated', (userList) => {
     const card = document.createElement('div');
     card.className = 'user-card';
     
-    // Tentukan tombol panggil/tambah orang berdasarkan status panggilan aktif
     let callBtnHtml = '';
     if (activeCallUsers.size > 0) {
       if (activeCallUsers.has(user.username)) {
@@ -265,7 +278,9 @@ function initWebRTCListeners() {
     // Process buffering candidates
     if (pendingCandidates[data.from]) {
       for (let cand of pendingCandidates[data.from]) {
-        await pc.addIceCandidate(new RTCIceCandidate(cand));
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(cand));
+        } catch(e) {}
       }
       delete pendingCandidates[data.from];
     }
@@ -282,7 +297,9 @@ function initWebRTCListeners() {
       await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
       if (pendingCandidates[data.from]) {
         for (let cand of pendingCandidates[data.from]) {
-          await pc.addIceCandidate(new RTCIceCandidate(cand));
+          try {
+            await pc.addIceCandidate(new RTCIceCandidate(cand));
+          } catch(e) {}
         }
         delete pendingCandidates[data.from];
       }
@@ -343,6 +360,13 @@ async function createPeerConnection(targetUser, displayName) {
   pc.onicecandidate = (event) => {
     if (event.candidate) {
       socket.emit('send_ice_candidate', { to: targetUser, candidate: event.candidate });
+    }
+  };
+
+  // Auto retry jika ada perubahan koneksi jaringan
+  pc.oniceconnectionstatechange = () => {
+    if (pc.iceConnectionState === 'failed') {
+      pc.restartIce();
     }
   };
 
@@ -440,7 +464,6 @@ function endCall() {
   peerConnections = {};
   activeCallUsers.clear();
   
-  // Hapus semua video lawan bicara
   const cards = videoGrid.querySelectorAll('.video-card');
   cards.forEach(c => {
     if (c.id !== 'card-local') c.remove();
