@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Aplikasi Obrolan & Video Call</title>
+  <title>Aplikasi Obrolan & Panggilan Video (Face to Face)</title>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
     * { box-sizing: border-box; font-family: Arial, sans-serif; }
@@ -12,22 +12,26 @@
     .hidden { display: none !important; }
     .input-group { margin-bottom: 12px; }
     input[type="text"], input[type="password"], input[type="number"] { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 6px; }
-    .btn { padding: 10px 15px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; color: white; margin-top: 5px; }
+    .btn { padding: 10px 15px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; color: white; margin-top: 5px; transition: background 0.2s; }
     .btn-primary { background-color: #007bff; }
+    .btn-primary:hover { background-color: #0056b3; }
     .btn-secondary { background-color: #6c757d; }
+    .btn-secondary:hover { background-color: #545b62; }
     .btn-success { background-color: #28a745; }
+    .btn-success:hover { background-color: #1e7e34; }
     .btn-warning { background-color: #ffc107; color: #000; }
     .btn-danger { background-color: #dc3545; }
 
-    /* Layout User Grid */
+    /* User Grid & Card Styling */
     .user-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 15px; margin: 15px 0; }
-    .user-card { border: 1px solid #e0e0e0; border-radius: 8px; padding: 12px; text-align: center; background: #fff; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-    .user-card img { width: 80px; height: 80px; border-radius: 50%; object-fit: cover; margin-bottom: 8px; border: 2px solid #007bff; }
+    .user-card { border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; text-align: center; background: #ffffff; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); transition: transform 0.2s ease, box-shadow 0.2s ease; }
+    .user-card:hover { transform: translateY(-3px); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); }
+    .user-card img { width: 85px; height: 85px; border-radius: 50%; object-fit: cover; margin-bottom: 10px; border: 3px solid #007bff; }
     .user-card h4 { margin: 5px 0 3px 0; font-size: 15px; }
     .user-card p { margin: 0; font-size: 12px; color: #666; }
     .card-actions { display: flex; justify-content: center; gap: 5px; margin-top: 10px; }
 
-    /* Video Call Container */
+    /* Video Call Layout */
     .f2f-video-container { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px; }
     @media (max-width: 600px) { .f2f-video-container { grid-template-columns: 1fr; } }
     .video-card { background: #000; border-radius: 10px; overflow: hidden; position: relative; aspect-ratio: 4 / 3; }
@@ -35,9 +39,9 @@
     .video-label { position: absolute; bottom: 10px; left: 10px; background: rgba(0,0,0,0.6); color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 12px; }
 
     /* Chat Area */
-    #chat-box { height: 200px; border: 1px solid #ddd; border-radius: 6px; overflow-y: auto; padding: 10px; background: #fafafa; margin-bottom: 10px; }
-    .msg { margin-bottom: 8px; word-break: break-all; font-size: 14px; }
-    .msg-private { color: #d63384; font-weight: bold; }
+    #chat-box { height: 250px; border: 1px solid #ddd; border-radius: 6px; overflow-y: auto; padding: 12px; background: #fafafa; margin-bottom: 10px; }
+    .msg { margin-bottom: 8px; word-break: break-word; font-size: 14px; line-height: 1.4; }
+    .msg-private { color: #d63384; font-weight: bold; background: #fff0f5; padding: 4px 8px; border-radius: 4px; display: inline-block; }
     .controls-bar { display: flex; gap: 10px; justify-content: center; margin-bottom: 15px; padding: 10px; background: #eee; border-radius: 8px; }
   </style>
 </head>
@@ -46,7 +50,7 @@
 <div class="container">
   <h2>Aplikasi Obrolan & Panggilan Video (Face to Face)</h2>
 
-  <!-- SEKSI AUTH -->
+  <!-- AUTHENTICATION SECTION -->
   <div id="authSection">
     <h3>Masuk / Daftar Akun</h3>
     <div class="input-group">
@@ -67,7 +71,7 @@
     </div>
   </div>
 
-  <!-- SEKSI PROFIL -->
+  <!-- PROFILE SECTION -->
   <div id="profileSection" class="hidden">
     <h3>Lengkapi Data Profil</h3>
     <div class="input-group">
@@ -90,14 +94,14 @@
     <button id="btnSaveProfile" class="btn btn-success" onclick="saveProfile()">Simpan & Lanjutkan</button>
   </div>
 
-  <!-- SEKSI UTAMA -->
+  <!-- MAIN APP SECTION -->
   <div id="mainSection" class="hidden">
-    <div style="display: flex; justify-content: space-between; align-items: center;">
-      <p>Halo, <b id="displayUsername" style="color: #007bff;"></b></p>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+      <p style="margin: 0;">Halo, <b id="displayUsername" style="color: #007bff;"></b></p>
       <button class="btn btn-secondary" onclick="editProfile()">Edit Profil</button>
     </div>
 
-    <!-- PANGGILAN VIDEO -->
+    <!-- VIDEO CALL AREA -->
     <div id="callContainer" class="hidden">
       <div class="controls-bar">
         <button id="btnMuteMic" class="btn btn-warning" onclick="toggleMic()">Mute Mic</button>
@@ -117,16 +121,16 @@
       </div>
     </div>
 
-    <!-- USER ONLINE -->
+    <!-- ONLINE USERS GRID -->
     <h3>Daftar Pengguna Online</h3>
     <div id="userGrid" class="user-grid"></div>
 
-    <!-- CHAT -->
-    <div style="display: flex; justify-content: space-between; align-items: center;">
-      <h3 id="chatHeader">Obrolan Teks (Publik)</h3>
+    <!-- CHAT SECTION -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px;">
+      <h3 id="chatHeader" style="margin: 0;">Obrolan Teks (Publik)</h3>
       <button id="btnResetChatTarget" class="btn btn-secondary hidden" style="font-size: 11px;" onclick="resetChatTarget()">Kirim ke Semua (Publik)</button>
     </div>
-    <div id="chat-box"></div>
+    <div id="chat-box" style="margin-top: 10px;"></div>
     <div class="input-group" style="display: flex; gap: 10px;">
       <input type="text" id="msgInput" placeholder="Ketik pesan..." onkeypress="if(event.key==='Enter') sendChatMessage()">
       <button class="btn btn-primary" onclick="sendChatMessage()">Kirim</button>
