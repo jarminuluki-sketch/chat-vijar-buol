@@ -15,34 +15,37 @@ const chatBox = document.getElementById('chat-box');
 let isMicMuted = false;
 let isCamOff = false;
 
-// KUNCI UTAMA: MULTI TURN & STUN SERVER UNTUK JARINGAN BEDA (SELULER / WI-FI)
+// =========================================================================
+// SOLUSI UTAMA: KONFIGURASI STUN + TURN SERVER LENGKAP UNTUK JARINGAN SELULER
+// =========================================================================
 const rtcConfig = {
   iceServers: [
-    // STUN Servers
+    // STUN Servers untuk Koneksi Langsung (Wi-Fi / LAN)
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun2.l.google.com:19302' },
     { urls: 'stun:stun3.l.google.com:19302' },
     { urls: 'stun:stun4.l.google.com:19302' },
     { urls: 'stun:global.stun.twilio.com:3478' },
-    
-    // TURN Relay Servers (Penting untuk menembus Kuota Seluler vs Wi-Fi)
+
+    // TURN Servers (Relay) Wajib untuk Jaringan Seluler (Telkomsel, Indosat, XL, dll.)
     {
-      urls: 'turn:openrelay.metered.ca:80',
-      username: 'openrelayproject',
-      credential: 'openrelayproject'
+      urls: "turn:openrelay.metered.ca:80",
+      username: "openrelayproject",
+      credential: "openrelayproject"
     },
     {
-      urls: 'turn:openrelay.metered.ca:443',
-      username: 'openrelayproject',
-      credential: 'openrelayproject'
+      urls: "turn:openrelay.metered.ca:443",
+      username: "openrelayproject",
+      credential: "openrelayproject"
     },
     {
-      urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-      username: 'openrelayproject',
-      credential: 'openrelayproject'
+      urls: "turn:openrelay.metered.ca:443?transport=tcp", // Menembus Firewall / NAT Seluler Ketat
+      username: "openrelayproject",
+      credential: "openrelayproject"
     }
   ],
+  iceTransportPolicy: 'all', // Mengizinkan fallback otomatis ke TURN
   iceCandidatePoolSize: 10
 };
 
@@ -54,7 +57,7 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-// --- AUTENTIKASI ---
+// --- AUTHENTICATION & SESSION LOGIC ---
 function register() {
   const username = document.getElementById('authUsername').value.trim();
   const password = document.getElementById('authPassword').value.trim();
@@ -103,7 +106,7 @@ socket.on('register_response', (data) => {
 socket.on('login_response', (data) => {
   if (data.success) {
     currentUsername = data.username;
-    localStorage.setItem('app_username', currentUsername);
+    localStorage.setItem('app_username', currentUsername); 
     document.getElementById('displayUsername').textContent = currentUsername;
     document.getElementById('authSection').classList.add('hidden');
 
@@ -186,7 +189,7 @@ function editProfile() {
   document.getElementById('profileSection').classList.remove('hidden');
 }
 
-// --- ONLINE USERS ---
+// --- ONLINE USER RENDER ---
 socket.on('user_list_updated', (userList) => {
   const userGrid = document.getElementById('userGrid');
   userGrid.innerHTML = '';
@@ -264,7 +267,7 @@ function appendMessage(text, isPrivate = false) {
   chatBox.scrollTop = chatBox.scrollHeight;
 }
 
-// --- WEBRTC SIGNALING & ENGINE ---
+// --- WEBRTC MULTI-PARTY CALL SYSTEM ---
 function initWebRTCListeners() {
   socket.on('incoming_call', async (data) => {
     const callerName = data.callerProfile.fullName || data.from;
@@ -278,7 +281,6 @@ function initWebRTCListeners() {
     const pc = await createPeerConnection(data.from, callerName);
     await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
     
-    // Terapkan penampung ICE candidates jika terkumpul sebelum RemoteDescription
     if (pendingCandidates[data.from]) {
       for (let cand of pendingCandidates[data.from]) {
         try { await pc.addIceCandidate(new RTCIceCandidate(cand)); } catch(e){}
@@ -329,13 +331,10 @@ function initWebRTCListeners() {
 async function getLocalStream() {
   if (!localStream) {
     try {
-      localStream = await navigator.mediaDevices.getUserMedia({ 
-        video: { width: { ideal: 640 }, height: { ideal: 480 } }, 
-        audio: true 
-      });
+      localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       localVideo.srcObject = localStream;
     } catch (err) {
-      alert('Gagal mengakses Kamera/Mikrofon! Izinkan akses perangkat.');
+      alert('Gagal mengakses Kamera/Mikrofon! Pastikan izin kamera aktif dan aplikasi dibuka menggunakan HTTPS.');
       throw err;
     }
   }
@@ -351,9 +350,10 @@ async function createPeerConnection(targetUser, displayName) {
   const pc = new RTCPeerConnection(rtcConfig);
   peerConnections[targetUser] = pc;
 
+  // Track stream audio & video
   stream.getTracks().forEach(track => pc.addTrack(track, stream));
 
-  // Menangkap Aliran Video & Audio Lawan Bicara
+  // Menangkap stream lawan bicara secara otomatis
   pc.ontrack = (event) => {
     let remoteStream = event.streams && event.streams[0];
     if (!remoteStream) {
@@ -411,7 +411,14 @@ function addOrUpdateRemoteVideo(username, displayName, stream) {
 
   if (video && video.srcObject !== stream) {
     video.srcObject = stream;
-    video.play().catch(e => console.log('Autoplay error:', e));
+    // Penanganan play() otomatis pada perangkat seluler
+    const playPromise = video.play();
+    if (playPromise !== undefined) {
+      playPromise.catch(() => {
+        video.muted = true; // Mute sejenak jika terblokir autoplay policy seluler
+        video.play();
+      });
+    }
   }
 }
 
