@@ -1,31 +1,42 @@
 let socket = io({ transports: ['websocket', 'polling'] });
 
-let peerConnection;
-let localStream;
+// Array Penampung Banyak Peer Connections (Grup Video Call)
+let peerConnections = {}; // { username: RTCPeerConnection }
+let pendingCandidates = {}; // { username: [candidates] }
+let localStream = null;
 let currentUsername = '';
-let targetCallUser = '';
-let targetChatUser = ''; // Jika kosong, otomatis menjadi Global Chat
+let targetChatUser = '';
 let photoBase64 = '';
+let activeCallUsers = new Set(); // Menyimpan siapa saja yang ada di panggilan
 
 const localVideo = document.getElementById('localVideo');
-const remoteVideo = document.getElementById('remoteVideo');
+const videoGrid = document.getElementById('videoGrid');
 const chatBox = document.getElementById('chat-box');
 
 let isMicMuted = false;
 let isCamOff = false;
 
-// Multi-STUN Server Google & Coturn untuk Kestabilan Koneksi Video
+// Konfigurasi STUN + TURN publik untuk menembus jaringan seluler/NAT yang ketat
 const rtcConfig = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun2.l.google.com:19302' },
     { urls: 'stun:stun3.l.google.com:19302' },
-    { urls: 'stun:stun4.l.google.com:19302' }
+    { urls: 'stun:stun4.l.google.com:19302' },
+    { urls: 'stun:global.stun.twilio.com:3478' }
   ]
 };
 
-// --- AUTHENTICATION LOGIC ---
+// AUTO CHECK SESSION SAAT APLIKASI DIBUKA
+window.addEventListener('DOMContentLoaded', () => {
+  const savedUser = localStorage.getItem('app_username');
+  if (savedUser) {
+    socket.emit('login_account', { username: savedUser, autoLogin: true });
+  }
+});
+
+// --- AUTHENTICATION & SESSION LOGIC ---
 function register() {
   const username = document.getElementById('authUsername').value.trim();
   const password = document.getElementById('authPassword').value.trim();
@@ -53,19 +64,13 @@ function handleCredentialResponse(response) {
 }
 
 socket.on('register_response', (data) => {
-  alert(data.message);
-  if (data.success) {
-    document.getElementById('authSection').classList.add('hidden');
-    document.getElementById('profileSection').classList.remove('hidden');
-  }
-});
-
-socket.on('login_response', (data) => {
   if (data.success) {
     currentUsername = data.username;
+    localStorage.setItem('app_username', currentUsername);
     document.getElementById('displayUsername').textContent = currentUsername;
     document.getElementById('authSection').classList.add('hidden');
 
+    // Jika belum ada profil, minta lengkapi profil, jika sudah langsung ke halaman utama
     if (!data.profile.fullName || !data.profile.age) {
       document.getElementById('profileSection').classList.remove('hidden');
     } else {
@@ -77,6 +82,32 @@ socket.on('login_response', (data) => {
     alert(data.message);
   }
 });
+
+socket.on('login_response', (data) => {
+  if (data.success) {
+    currentUsername = data.username;
+    localStorage.setItem('app_username', currentUsername); // Simpan sesi login
+    document.getElementById('displayUsername').textContent = currentUsername;
+    document.getElementById('authSection').classList.add('hidden');
+
+    if (!data.profile.fullName || !data.profile.age) {
+      document.getElementById('profileSection').classList.remove('hidden');
+    } else {
+      document.getElementById('mainSection').classList.remove('hidden');
+      socket.emit('get_user_list');
+    }
+    initWebRTCListeners();
+  } else {
+    localStorage.removeItem('app_username');
+    if (!data.autoLogin) alert(data.message);
+  }
+});
+
+function logout() {
+  localStorage.removeItem('app_username');
+  socket.emit('logout_account');
+  location.reload();
+}
 
 // --- FOTO COMPRESSION ---
 document.getElementById('profPhotoInput').addEventListener('change', function(e) {
@@ -148,20 +179,33 @@ socket.on('user_list_updated', (userList) => {
 
     const card = document.createElement('div');
     card.className = 'user-card';
+    
+    // Tentukan tombol panggil/tambah orang berdasarkan status panggilan aktif
+    let callBtnHtml = '';
+    if (activeCallUsers.size > 0) {
+      if (activeCallUsers.has(user.username)) {
+        callBtnHtml = `<button class="btn btn-secondary" style="font-size:11px;" disabled>Dalam Panggilan</button>`;
+      } else {
+        callBtnHtml = `<button class="btn btn-warning" style="font-size:11px;" onclick="startCallWith('${user.username}', '${user.fullName}')">+ Tambah ke Panggilan</button>`;
+      }
+    } else {
+      callBtnHtml = `<button class="btn btn-success" style="font-size:11px;" onclick="startCallWith('${user.username}', '${user.fullName}')">Panggil Video</button>`;
+    }
+
     card.innerHTML = `
       <img src="${user.photo}" alt="Foto ${user.fullName}">
       <h4>${user.fullName}</h4>
       <p>Umur: ${user.age} Thn (${user.birthYear})</p>
       <div class="card-actions">
-        <button class="btn btn-success" style="font-size:11px; padding:6px 10px;" onclick="startCallWith('${user.username}', '${user.fullName}')">Panggil Video</button>
-        <button class="btn btn-primary" style="font-size:11px; padding:6px 10px;" onclick="selectChatTarget('${user.username}', '${user.fullName}')">Chat DM</button>
+        ${callBtnHtml}
+        <button class="btn btn-primary" style="font-size:11px;" onclick="selectChatTarget('${user.username}', '${user.fullName}')">Chat DM</button>
       </div>
     `;
     userGrid.appendChild(card);
   });
 });
 
-// --- CHAT SYSTEM (GLOBAL & DIRECT) ---
+// --- CHAT SYSTEM ---
 function selectChatTarget(username, fullName) {
   targetChatUser = username;
   document.getElementById('chatHeader').textContent = `Obrolan Privat (DM) dengan: ${fullName}`;
@@ -191,8 +235,7 @@ function sendChatMessage() {
 }
 
 socket.on('receive_chat', (data) => {
-  if (data.from === currentUsername) return; // Menghindari duplikasi pesan sendiri
-
+  if (data.from === currentUsername) return;
   const prefix = data.isPrivate ? `[DM] ${data.senderName}` : data.senderName;
   appendMessage(`${prefix}: ${data.message}`, data.isPrivate);
 });
@@ -205,91 +248,164 @@ function appendMessage(text, isPrivate = false) {
   chatBox.scrollTop = chatBox.scrollHeight;
 }
 
-// --- WEBRTC VIDEO CALL SYSTEM ---
+// --- WEBRTC GROUP & MULTI-PARTY CALL SYSTEM ---
 function initWebRTCListeners() {
   socket.on('incoming_call', async (data) => {
     const callerName = data.callerProfile.fullName || data.from;
-    const accept = confirm(`Panggilan video masuk dari ${callerName}. Angkat?`);
+    const accept = confirm(`Panggilan video dari ${callerName}. Angkat?`);
     if (!accept) return;
 
-    targetCallUser = data.from;
-    document.getElementById('remoteLabel').textContent = callerName;
     document.getElementById('callContainer').classList.remove('hidden');
+    activeCallUsers.add(data.from);
+    socket.emit('get_user_list');
 
-    await setupPeerConnection();
-    await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+    const pc = await createPeerConnection(data.from, callerName);
+    await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+    
+    // Process buffering candidates
+    if (pendingCandidates[data.from]) {
+      for (let cand of pendingCandidates[data.from]) {
+        await pc.addIceCandidate(new RTCIceCandidate(cand));
+      }
+      delete pendingCandidates[data.from];
+    }
 
-    const answer = await peerConnection.createAnswer();
-    await peerConnection.setLocalDescription(answer);
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
 
     socket.emit('answer_call', { to: data.from, answer: answer });
   });
 
   socket.on('call_accepted', async (data) => {
-    if (peerConnection) {
-      await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
-    }
-  });
-
-  socket.on('receive_ice_candidate', async (data) => {
-    if (peerConnection && data.candidate) {
-      try {
-        await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
-      } catch (e) {
-        console.error('ICE Candidate error:', e);
+    const pc = peerConnections[data.from];
+    if (pc) {
+      await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+      if (pendingCandidates[data.from]) {
+        for (let cand of pendingCandidates[data.from]) {
+          await pc.addIceCandidate(new RTCIceCandidate(cand));
+        }
+        delete pendingCandidates[data.from];
       }
     }
   });
 
-  socket.on('call_ended_by_peer', () => {
-    alert('Panggilan diakhiri oleh lawan bicara.');
-    closeCallUI();
+  socket.on('receive_ice_candidate', async (data) => {
+    const pc = peerConnections[data.from];
+    if (pc && pc.remoteDescription) {
+      try {
+        await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+      } catch (e) {
+        console.error('ICE Candidate error:', e);
+      }
+    } else {
+      if (!pendingCandidates[data.from]) pendingCandidates[data.from] = [];
+      pendingCandidates[data.from].push(data.candidate);
+    }
+  });
+
+  socket.on('call_ended_by_peer', (data) => {
+    removePeerVideo(data.from);
   });
 
   socket.on('call_failed', (data) => alert(data.message));
 }
 
-async function setupPeerConnection() {
-  if (peerConnection) peerConnection.close();
-  peerConnection = new RTCPeerConnection(rtcConfig);
-
-  try {
-    if (!localStream) {
+async function getLocalStream() {
+  if (!localStream) {
+    try {
       localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       localVideo.srcObject = localStream;
+    } catch (err) {
+      alert('Gagal mengakses Kamera/Mikrofon! Izinkan akses perangkat di browser Anda.');
+      throw err;
     }
-  } catch (err) {
-    alert('Gagal mengaktifkan Kamera/Mikrofon! Pastikan Anda memberikan izin (Allow) pada browser.');
-    return;
+  }
+  return localStream;
+}
+
+async function createPeerConnection(targetUser, displayName) {
+  if (peerConnections[targetUser]) {
+    peerConnections[targetUser].close();
   }
 
-  localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+  const stream = await getLocalStream();
+  const pc = new RTCPeerConnection(rtcConfig);
+  peerConnections[targetUser] = pc;
 
-  peerConnection.ontrack = (event) => {
+  stream.getTracks().forEach(track => pc.addTrack(track, stream));
+
+  pc.ontrack = (event) => {
     if (event.streams && event.streams[0]) {
-      remoteVideo.srcObject = event.streams[0];
-      remoteVideo.play().catch(e => console.log('Autoplay play error:', e));
+      addOrUpdateRemoteVideo(targetUser, displayName, event.streams[0]);
     }
   };
 
-  peerConnection.onicecandidate = (event) => {
-    if (event.candidate && targetCallUser) {
-      socket.emit('send_ice_candidate', { to: targetCallUser, candidate: event.candidate });
+  pc.onicecandidate = (event) => {
+    if (event.candidate) {
+      socket.emit('send_ice_candidate', { to: targetUser, candidate: event.candidate });
     }
   };
+
+  return pc;
 }
 
 async function startCallWith(username, fullName) {
-  targetCallUser = username;
-  document.getElementById('remoteLabel').textContent = fullName;
   document.getElementById('callContainer').classList.remove('hidden');
+  activeCallUsers.add(username);
+  socket.emit('get_user_list');
 
-  await setupPeerConnection();
-
-  const offer = await peerConnection.createOffer();
-  await peerConnection.setLocalDescription(offer);
+  const pc = await createPeerConnection(username, fullName);
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
 
   socket.emit('call_user', { userToCall: username, offer: offer });
+}
+
+function addOrUpdateRemoteVideo(username, displayName, stream) {
+  let card = document.getElementById(`card-${username}`);
+  if (!card) {
+    card = document.createElement('div');
+    card.className = 'video-card';
+    card.id = `card-${username}`;
+
+    const video = document.createElement('video');
+    video.id = `video-${username}`;
+    video.autoplay = true;
+    video.playsInline = true;
+
+    const label = document.createElement('div');
+    label.className = 'video-label';
+    label.textContent = displayName || username;
+
+    card.appendChild(video);
+    card.appendChild(label);
+    videoGrid.appendChild(card);
+
+    video.srcObject = stream;
+    video.play().catch(e => console.log('Autoplay play error:', e));
+  } else {
+    const video = document.getElementById(`video-${username}`);
+    if (video) {
+      video.srcObject = stream;
+      video.play().catch(e => console.log('Autoplay play error:', e));
+    }
+  }
+}
+
+function removePeerVideo(username) {
+  if (peerConnections[username]) {
+    peerConnections[username].close();
+    delete peerConnections[username];
+  }
+  activeCallUsers.delete(username);
+  
+  const card = document.getElementById(`card-${username}`);
+  if (card) card.remove();
+
+  if (activeCallUsers.size === 0) {
+    document.getElementById('callContainer').classList.add('hidden');
+  }
+  socket.emit('get_user_list');
 }
 
 function toggleMic() {
@@ -317,14 +433,19 @@ function toggleCam() {
 }
 
 function endCall() {
-  if (targetCallUser) {
-    socket.emit('end_call', { to: targetCallUser });
+  for (let u of activeCallUsers) {
+    socket.emit('end_call', { to: u });
+    if (peerConnections[u]) peerConnections[u].close();
   }
-  closeCallUI();
-}
+  peerConnections = {};
+  activeCallUsers.clear();
+  
+  // Hapus semua video lawan bicara
+  const cards = videoGrid.querySelectorAll('.video-card');
+  cards.forEach(c => {
+    if (c.id !== 'card-local') c.remove();
+  });
 
-function closeCallUI() {
-  if (peerConnection) peerConnection.close();
   document.getElementById('callContainer').classList.add('hidden');
-  targetCallUser = '';
+  socket.emit('get_user_list');
 }
