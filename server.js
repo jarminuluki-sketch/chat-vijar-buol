@@ -6,22 +6,20 @@ const path = require('path');
 const app = express();
 const server = http.createServer(app);
 
-// Konfigurasi Socket.io
 const io = new Server(server, {
   cors: { origin: "*", methods: ["GET", "POST"] },
-  maxHttpBufferSize: 1e7 // Maksimal buffer 10MB untuk pengiriman data foto
+  maxHttpBufferSize: 1e7
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Data sementara di memori server
 const users = {};          // { username: { password, fullName, age, birthYear, photo } }
 const connectedUsers = {}; // { username: socketId }
 
 io.on('connection', (socket) => {
   console.log('User terhubung:', socket.id);
 
-  // 1. REGISTRASI AKUN MANUAL
+  // 1. REGISTRASI AKUN MANUAL & AUTO-LOGIN
   socket.on('register_account', ({ username, password }) => {
     try {
       if (!username || !password) {
@@ -31,14 +29,25 @@ io.on('connection', (socket) => {
         return socket.emit('register_response', { success: false, message: 'Username sudah terdaftar!' });
       }
       users[username] = { password, fullName: '', age: '', birthYear: '', photo: '' };
-      socket.emit('register_response', { success: true, message: 'Registrasi berhasil! Silakan isi profil.' });
+      
+      // Auto-login saat registrasi
+      socket.username = username;
+      connectedUsers[username] = socket.id;
+
+      socket.emit('register_response', { 
+        success: true, 
+        message: 'Registrasi berhasil! Silakan isi profil.',
+        username: username,
+        profile: users[username]
+      });
+      broadcastUserList();
     } catch (err) {
       socket.emit('register_response', { success: false, message: 'Gagal melakukan registrasi.' });
     }
   });
 
-  // 2. LOGIN MANUAL & GOOGLE
-  socket.on('login_account', ({ username, password, isGoogle, googleProfile }) => {
+  // 2. LOGIN MANUAL & GOOGLE / AUTO LOGIN
+  socket.on('login_account', ({ username, password, isGoogle, googleProfile, autoLogin }) => {
     try {
       if (isGoogle && googleProfile) {
         const gUsername = googleProfile.email.split('@')[0];
@@ -53,12 +62,22 @@ io.on('connection', (socket) => {
         }
         socket.username = gUsername;
         connectedUsers[gUsername] = socket.id;
+        broadcastUserList();
         return socket.emit('login_response', { success: true, username: gUsername, profile: users[gUsername] });
+      }
+
+      // Sesi Auto Login dari LocalStorage
+      if (autoLogin && username && users[username]) {
+        socket.username = username;
+        connectedUsers[username] = socket.id;
+        broadcastUserList();
+        return socket.emit('login_response', { success: true, username: username, profile: users[username] });
       }
 
       if (users[username] && users[username].password === password) {
         connectedUsers[username] = socket.id;
         socket.username = username;
+        broadcastUserList();
         socket.emit('login_response', { success: true, username: username, profile: users[username] });
       } else {
         socket.emit('login_response', { success: false, message: 'Username atau Password salah!' });
@@ -119,7 +138,6 @@ io.on('connection', (socket) => {
     const senderName = (users[socket.username] && users[socket.username].fullName) ? users[socket.username].fullName : socket.username;
 
     if (to && connectedUsers[to]) {
-      // Private Message (DM)
       io.to(connectedUsers[to]).emit('receive_chat', {
         from: socket.username,
         senderName: senderName,
@@ -127,7 +145,6 @@ io.on('connection', (socket) => {
         isPrivate: true
       });
     } else {
-      // Global Broadcast (Chat Publik)
       io.emit('receive_chat', {
         from: socket.username,
         senderName: senderName,
@@ -137,7 +154,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 6. WEBRTC SIGNALING (VIDEO CALL)
+  // 6. WEBRTC MULTI-PARTY SIGNALING (GROUP / FACE TO FACE)
   socket.on('call_user', ({ userToCall, offer }) => {
     const targetSocketId = connectedUsers[userToCall];
     if (targetSocketId) {
@@ -154,25 +171,33 @@ io.on('connection', (socket) => {
   socket.on('answer_call', ({ to, answer }) => {
     const targetSocketId = connectedUsers[to];
     if (targetSocketId) {
-      io.to(targetSocketId).emit('call_accepted', { answer });
+      io.to(targetSocketId).emit('call_accepted', { from: socket.username, answer });
     }
   });
 
   socket.on('send_ice_candidate', ({ to, candidate }) => {
     const targetSocketId = connectedUsers[to];
     if (targetSocketId) {
-      io.to(targetSocketId).emit('receive_ice_candidate', { candidate });
+      io.to(targetSocketId).emit('receive_ice_candidate', { from: socket.username, candidate });
     }
   });
 
   socket.on('end_call', ({ to }) => {
     const targetSocketId = connectedUsers[to];
     if (targetSocketId) {
-      io.to(targetSocketId).emit('call_ended_by_peer');
+      io.to(targetSocketId).emit('call_ended_by_peer', { from: socket.username });
     }
   });
 
-  // 7. DISCONNECT
+  // 7. DISCONNECT & LOGOUT
+  socket.on('logout_account', () => {
+    if (socket.username) {
+      delete connectedUsers[socket.username];
+      delete socket.username;
+      broadcastUserList();
+    }
+  });
+
   socket.on('disconnect', () => {
     if (socket.username) {
       delete connectedUsers[socket.username];
