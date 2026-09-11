@@ -1,5 +1,5 @@
 // =========================================================================
-// KONEKSI SOCKET.IO
+// 1. KONEKSI SOCKET.IO
 // =========================================================================
 let socket = io({ 
   transports: ['websocket', 'polling'],
@@ -8,7 +8,7 @@ let socket = io({
   reconnectionDelay: 1000
 });
 
-// Variable Global WebRTC & UI State
+// Variable Global WebRTC & State Aplikasi
 let peerConnections = {}; 
 let pendingCandidates = {}; 
 let localStream = null;
@@ -25,7 +25,7 @@ let isMicMuted = false;
 let isCamOff = false;
 
 // =========================================================================
-// KONFIGURASI RTC (GOOGLE STUN + METERED TURN PRIVATE)
+// 2. KONFIGURASI RTC (GOOGLE STUN + METERED TURN PRIVATE)
 // =========================================================================
 const rtcConfig = {
   iceServers: [
@@ -33,33 +33,26 @@ const rtcConfig = {
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun2.l.google.com:19302' },
-    { urls: 'stun:stun3.l.google.com:19302' },
-    { urls: 'stun:stun4.l.google.com:19302' },
 
-    // TURN Server Pribadi Metered (Menghindari Layar Hitam di Jaringan Seluler)
+    // TURN Server Metered (Menembus CGNAT / Firewall Operator Seluler)
     {
-      urls: "turn:global.relays.metered.ca:80",
-      username: "b6547ac0c823c059fad69fe9",
-      credential: "UU7TF5yHhpY9K8g2"
-    },
-    {
-      urls: "turn:global.relays.metered.ca:443",
-      username: "b6547ac0c823c059fad69fe9",
-      credential: "UU7TF5yHhpY9K8g2"
-    },
-    {
-      urls: "turn:global.relays.metered.ca:443?transport=tcp",
+      urls: [
+        "turn:global.relays.metered.ca:80",
+        "turn:global.relays.metered.ca:80?transport=tcp",
+        "turn:global.relays.metered.ca:443",
+        "turns:global.relays.metered.ca:443?transport=tcp"
+      ],
       username: "b6547ac0c823c059fad69fe9",
       credential: "UU7TF5yHhpY9K8g2"
     }
   ],
-  iceTransportPolicy: 'all',
+  iceTransportPolicy: 'all', 
   bundlePolicy: 'max-bundle',
   rtcpMuxPolicy: 'require'
 };
 
 // =========================================================================
-// AUTO CHECK SESSION & INITIALIZATION
+// 3. INISIALISASI & AUTENTIKASI
 // =========================================================================
 window.addEventListener('DOMContentLoaded', () => {
   const savedUser = localStorage.getItem('app_username');
@@ -68,7 +61,6 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-// --- AUTENTIKASI ---
 function register() {
   const username = document.getElementById('authUsername').value.trim();
   const password = document.getElementById('authPassword').value.trim();
@@ -115,13 +107,19 @@ socket.on('login_response', (data) => {
 function handleLoginSuccess(data) {
   currentUsername = data.username;
   localStorage.setItem('app_username', currentUsername);
-  document.getElementById('displayUsername').textContent = currentUsername;
-  document.getElementById('authSection').classList.add('hidden');
+  
+  const displayEl = document.getElementById('displayUsername');
+  if (displayEl) displayEl.textContent = currentUsername;
+  
+  const authSec = document.getElementById('authSection');
+  if (authSec) authSec.classList.add('hidden');
 
   if (!data.profile || !data.profile.fullName || !data.profile.age) {
-    document.getElementById('profileSection').classList.remove('hidden');
+    const profSec = document.getElementById('profileSection');
+    if (profSec) profSec.classList.remove('hidden');
   } else {
-    document.getElementById('mainSection').classList.remove('hidden');
+    const mainSec = document.getElementById('mainSection');
+    if (mainSec) mainSec.classList.remove('hidden');
     socket.emit('get_user_list');
   }
   initWebRTCListeners();
@@ -133,7 +131,9 @@ function logout() {
   location.reload();
 }
 
-// --- FOTO PROFIL & COMPRESSION ---
+// =========================================================================
+// 4. PROFIL & KOMPRESI GAMBAR
+// =========================================================================
 const profPhotoInput = document.getElementById('profPhotoInput');
 if (profPhotoInput) {
   profPhotoInput.addEventListener('change', function(e) {
@@ -200,7 +200,9 @@ function editProfile() {
   document.getElementById('profileSection').classList.remove('hidden');
 }
 
-// --- USER ONLINE GRID ---
+// =========================================================================
+// 5. DAFTAR PENGGUNA ONLINE
+// =========================================================================
 socket.on('user_list_updated', (userList) => {
   const userGrid = document.getElementById('userGrid');
   if (!userGrid) return;
@@ -236,7 +238,9 @@ socket.on('user_list_updated', (userList) => {
   });
 });
 
-// --- SYSTEM CHAT & PRIVAT DM ---
+// =========================================================================
+// 6. CHAT TEKS & DM PRIVAT
+// =========================================================================
 function selectChatTarget(username, fullName) {
   targetChatUser = username;
   document.getElementById('chatHeader').textContent = `Obrolan Privat (DM) dengan: ${fullName}`;
@@ -281,7 +285,7 @@ function appendMessage(text, isPrivate = false) {
 }
 
 // =========================================================================
-// WEBRTC SIGNALING & STREAMING MANAGEMENT
+// 7. WEBRTC ENGINE (PANGGILAN VIDEO & RELAY TURN SELULER)
 // =========================================================================
 function initWebRTCListeners() {
   socket.off('incoming_call');
@@ -303,7 +307,6 @@ function initWebRTCListeners() {
       const pc = await createPeerConnection(data.from, callerName);
       await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
       
-      // Proses ICE Candidates yang datang lebih awal
       await processPendingCandidates(data.from, pc);
 
       const answer = await pc.createAnswer();
@@ -383,10 +386,8 @@ async function createPeerConnection(targetUser, displayName) {
   const pc = new RTCPeerConnection(rtcConfig);
   peerConnections[targetUser] = pc;
 
-  // Menambahkan Local Tracks
   stream.getTracks().forEach(track => pc.addTrack(track, stream));
 
-  // Menangkap Remote Stream Lawan Bicara
   pc.ontrack = (event) => {
     let remoteStream = event.streams && event.streams[0];
     if (!remoteStream) {
@@ -403,9 +404,9 @@ async function createPeerConnection(targetUser, displayName) {
   };
 
   pc.oniceconnectionstatechange = () => {
-    console.log(`Status ICE (${targetUser}):`, pc.iceConnectionState);
-    if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
-      console.warn('Percobaan sambung ulang ICE (Ice Restart)...');
+    console.log(`[ICE State] ${targetUser}:`, pc.iceConnectionState);
+    if (pc.iceConnectionState === 'failed') {
+      console.warn('Percobaan pemulihan koneksi seluler (ICE Restart)...');
       pc.restartIce();
     }
   };
@@ -442,6 +443,7 @@ function addOrUpdateRemoteVideo(username, displayName, stream) {
     video.id = `video-${username}`;
     video.autoplay = true;
     video.playsInline = true;
+    video.setAttribute('playsinline', ''); // Penting untuk iOS / Android Chrome
 
     const label = document.createElement('div');
     label.className = 'video-label';
@@ -457,14 +459,12 @@ function addOrUpdateRemoteVideo(username, displayName, stream) {
   if (video && video.srcObject !== stream) {
     video.srcObject = stream;
     
-    // Penanganan Autoplay Browser HP (Mencegah Layar Hitam Karena Autoplay Blocked)
-    const playPromise = video.play();
-    if (playPromise !== undefined) {
-      playPromise.catch(() => {
-        video.muted = true;
-        video.play().catch(e => console.log("Gagal auto-play video:", e));
-      });
-    }
+    // Penanganan Autoplay di Browser HP
+    video.play().catch(error => {
+      console.warn("Autoplay terhalang oleh browser, mencoba mode mute:", error);
+      video.muted = true;
+      video.play();
+    });
   }
 }
 
@@ -484,7 +484,9 @@ function removePeerVideo(username) {
   socket.emit('get_user_list');
 }
 
-// --- KONTROL KAMERA & MIKROFON ---
+// =========================================================================
+// 8. KONTROL MIKROFON & KAMERA
+// =========================================================================
 function toggleMic() {
   if (!localStream) return;
   const audioTrack = localStream.getAudioTracks()[0];
