@@ -19,7 +19,7 @@ const connectedUsers = {}; // { username: socketId }
 io.on('connection', (socket) => {
   console.log('User terhubung:', socket.id);
 
-  // 1. REGISTRASI AKUN MANUAL & AUTO-LOGIN
+  // 1. REGISTRASI AKUN
   socket.on('register_account', ({ username, password }) => {
     try {
       if (!username || !password) {
@@ -30,7 +30,6 @@ io.on('connection', (socket) => {
       }
       users[username] = { password, fullName: '', age: '', birthYear: '', photo: '' };
       
-      // Auto-login saat registrasi
       socket.username = username;
       connectedUsers[username] = socket.id;
 
@@ -46,7 +45,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 2. LOGIN MANUAL & GOOGLE / AUTO LOGIN
+  // 2. LOGIN AKUN & AUTO LOGIN
   socket.on('login_account', ({ username, password, isGoogle, googleProfile, autoLogin }) => {
     try {
       if (isGoogle && googleProfile) {
@@ -66,7 +65,6 @@ io.on('connection', (socket) => {
         return socket.emit('login_response', { success: true, username: gUsername, profile: users[gUsername] });
       }
 
-      // Sesi Auto Login dari LocalStorage
       if (autoLogin && username && users[username]) {
         socket.username = username;
         connectedUsers[username] = socket.id;
@@ -133,7 +131,7 @@ io.on('connection', (socket) => {
     return list;
   }
 
-  // 5. CHAT (GLOBAL & PRIVATE)
+  // 5. CHAT SYSTEM
   socket.on('send_chat', ({ to, message }) => {
     const senderName = (users[socket.username] && users[socket.username].fullName) ? users[socket.username].fullName : socket.username;
 
@@ -154,7 +152,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 6. WEBRTC MULTI-PARTY SIGNALING (GROUP / FACE TO FACE)
+  // 6. WEBRTC SIGNALING (CROSS-NETWORK / DIFFERENT NETWORKS)
   socket.on('call_user', ({ userToCall, offer }) => {
     const targetSocketId = connectedUsers[userToCall];
     if (targetSocketId) {
