@@ -4,7 +4,7 @@ let peerConnection;
 let localStream;
 let currentUsername = '';
 let targetCallUser = '';
-let targetChatUser = ''; // Jika kosong, pesan dikirim ke Global Chat
+let targetChatUser = ''; // Jika kosong, otomatis menjadi Global Chat
 let photoBase64 = '';
 
 const localVideo = document.getElementById('localVideo');
@@ -14,7 +14,7 @@ const chatBox = document.getElementById('chat-box');
 let isMicMuted = false;
 let isCamOff = false;
 
-// STUN Server Lengkap untuk Mencegah Video Blank/Hitam
+// Multi-STUN Server Google & Coturn untuk Kestabilan Koneksi Video
 const rtcConfig = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
@@ -25,7 +25,7 @@ const rtcConfig = {
   ]
 };
 
-// --- AUTHENTICATION ---
+// --- AUTHENTICATION LOGIC ---
 function register() {
   const username = document.getElementById('authUsername').value.trim();
   const password = document.getElementById('authPassword').value.trim();
@@ -78,7 +78,7 @@ socket.on('login_response', (data) => {
   }
 });
 
-// --- KOMPRESI FOTO AUTOMATIS ---
+// --- FOTO COMPRESSION ---
 document.getElementById('profPhotoInput').addEventListener('change', function(e) {
   const file = e.target.files[0];
   const statusDiv = document.getElementById('uploadStatus');
@@ -138,7 +138,7 @@ function editProfile() {
   document.getElementById('profileSection').classList.remove('hidden');
 }
 
-// --- USER ONLINE GRID ---
+// --- ONLINE USER RENDER ---
 socket.on('user_list_updated', (userList) => {
   const userGrid = document.getElementById('userGrid');
   userGrid.innerHTML = '';
@@ -161,7 +161,7 @@ socket.on('user_list_updated', (userList) => {
   });
 });
 
-// --- CHAT LOGIC (GLOBAL & DIRECT) ---
+// --- CHAT SYSTEM (GLOBAL & DIRECT) ---
 function selectChatTarget(username, fullName) {
   targetChatUser = username;
   document.getElementById('chatHeader').textContent = `Obrolan Privat (DM) dengan: ${fullName}`;
@@ -191,7 +191,7 @@ function sendChatMessage() {
 }
 
 socket.on('receive_chat', (data) => {
-  if (data.from === currentUsername) return; // Mencegah duplikasi tampilan pesan sendiri
+  if (data.from === currentUsername) return; // Menghindari duplikasi pesan sendiri
 
   const prefix = data.isPrivate ? `[DM] ${data.senderName}` : data.senderName;
   appendMessage(`${prefix}: ${data.message}`, data.isPrivate);
@@ -205,11 +205,11 @@ function appendMessage(text, isPrivate = false) {
   chatBox.scrollTop = chatBox.scrollHeight;
 }
 
-// --- WEBRTC 1-ON-1 LOGIC ---
+// --- WEBRTC VIDEO CALL SYSTEM ---
 function initWebRTCListeners() {
   socket.on('incoming_call', async (data) => {
     const callerName = data.callerProfile.fullName || data.from;
-    const accept = confirm(`Panggilan video dari ${callerName}. Angkat?`);
+    const accept = confirm(`Panggilan video masuk dari ${callerName}. Angkat?`);
     if (!accept) return;
 
     targetCallUser = data.from;
@@ -259,7 +259,7 @@ async function setupPeerConnection() {
       localVideo.srcObject = localStream;
     }
   } catch (err) {
-    alert('Gagal mengaktifkan Kamera/Mikrofon! Pastikan izin lokasi/kamera diberikan di browser.');
+    alert('Gagal mengaktifkan Kamera/Mikrofon! Pastikan Anda memberikan izin (Allow) pada browser.');
     return;
   }
 
@@ -268,7 +268,7 @@ async function setupPeerConnection() {
   peerConnection.ontrack = (event) => {
     if (event.streams && event.streams[0]) {
       remoteVideo.srcObject = event.streams[0];
-      remoteVideo.play().catch(e => console.log('Autoplay error:', e));
+      remoteVideo.play().catch(e => console.log('Autoplay play error:', e));
     }
   };
 
