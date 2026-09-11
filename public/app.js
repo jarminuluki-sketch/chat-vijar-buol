@@ -4,7 +4,7 @@
 let socket = io({ 
   transports: ['websocket', 'polling'],
   reconnection: true,
-  reconnectionAttempts: 10,
+  reconnectionAttempts: 15,
   reconnectionDelay: 1000
 });
 
@@ -25,7 +25,7 @@ let isMicMuted = false;
 let isCamOff = false;
 
 // =========================================================================
-// 2. KONFIGURASI RTC (GOOGLE STUN + METERED TURN PRIVATE)
+// 2. KONFIGURASI RTC (MULTI-TURN SERVER FALLBACK UNTUK JARINGAN SELULER)
 // =========================================================================
 const rtcConfig = {
   iceServers: [
@@ -33,8 +33,9 @@ const rtcConfig = {
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun3.l.google.com:19302' },
 
-    // TURN Server Metered (Menembus CGNAT / Firewall Operator Seluler)
+    // Primary TURN: Metered Server
     {
       urls: [
         "turn:global.relays.metered.ca:80",
@@ -44,6 +45,17 @@ const rtcConfig = {
       ],
       username: "b6547ac0c823c059fad69fe9",
       credential: "UU7TF5yHhpY9K8g2"
+    },
+
+    // Secondary Backup TURN: OpenRelay (Cadangan Gratis Publik)
+    {
+      urls: [
+        "turn:openrelay.metered.ca:80",
+        "turn:openrelay.metered.ca:443",
+        "turn:openrelay.metered.ca:443?transport=tcp"
+      ],
+      username: "openrelay",
+      credential: "openrelay"
     }
   ],
   iceTransportPolicy: 'all', 
@@ -59,6 +71,11 @@ window.addEventListener('DOMContentLoaded', () => {
   if (savedUser) {
     socket.emit('login_account', { username: savedUser, autoLogin: true });
   }
+});
+
+// Bersihkan koneksi saat tab ditutup / direfresh
+window.addEventListener('beforeunload', () => {
+  endCall();
 });
 
 function register() {
@@ -126,6 +143,7 @@ function handleLoginSuccess(data) {
 }
 
 function logout() {
+  endCall();
   localStorage.removeItem('app_username');
   socket.emit('logout_account');
   location.reload();
@@ -285,7 +303,7 @@ function appendMessage(text, isPrivate = false) {
 }
 
 // =========================================================================
-// 7. WEBRTC ENGINE (PANGGILAN VIDEO & RELAY TURN SELULER)
+// 7. WEBRTC ENGINE (PANGGILAN VIDEO + AUTO ICE RESTART)
 // =========================================================================
 function initWebRTCListeners() {
   socket.off('incoming_call');
@@ -380,6 +398,7 @@ async function getLocalStream() {
 async function createPeerConnection(targetUser, displayName) {
   if (peerConnections[targetUser]) {
     peerConnections[targetUser].close();
+    delete peerConnections[targetUser];
   }
 
   const stream = await getLocalStream();
@@ -404,9 +423,9 @@ async function createPeerConnection(targetUser, displayName) {
   };
 
   pc.oniceconnectionstatechange = () => {
-    console.log(`[ICE State] ${targetUser}:`, pc.iceConnectionState);
-    if (pc.iceConnectionState === 'failed') {
-      console.warn('Percobaan pemulihan koneksi seluler (ICE Restart)...');
+    console.log(`[ICE Connection State] (${targetUser}):`, pc.iceConnectionState);
+    if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
+      console.warn('Sinyal terputus/terhalang. Mencoba menyambung kembali (ICE Restart)...');
       pc.restartIce();
     }
   };
@@ -443,7 +462,7 @@ function addOrUpdateRemoteVideo(username, displayName, stream) {
     video.id = `video-${username}`;
     video.autoplay = true;
     video.playsInline = true;
-    video.setAttribute('playsinline', ''); // Penting untuk iOS / Android Chrome
+    video.setAttribute('playsinline', '');
 
     const label = document.createElement('div');
     label.className = 'video-label';
@@ -459,12 +478,14 @@ function addOrUpdateRemoteVideo(username, displayName, stream) {
   if (video && video.srcObject !== stream) {
     video.srcObject = stream;
     
-    // Penanganan Autoplay di Browser HP
-    video.play().catch(error => {
-      console.warn("Autoplay terhalang oleh browser, mencoba mode mute:", error);
-      video.muted = true;
-      video.play();
-    });
+    // Autoplay fail-safe di HP
+    const playPromise = video.play();
+    if (playPromise !== undefined) {
+      playPromise.catch(() => {
+        video.muted = true;
+        video.play().catch(e => console.error("Gagal auto-play:", e));
+      });
+    }
   }
 }
 
@@ -518,9 +539,13 @@ function toggleCam() {
 function endCall() {
   for (let u of activeCallUsers) {
     socket.emit('end_call', { to: u });
-    if (peerConnections[u]) peerConnections[u].close();
+    if (peerConnections[u]) {
+      peerConnections[u].close();
+      delete peerConnections[u];
+    }
   }
   peerConnections = {};
+  pendingCandidates = {};
   activeCallUsers.clear();
   
   if (videoGrid) {
