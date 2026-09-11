@@ -16,37 +16,30 @@ let isMicMuted = false;
 let isCamOff = false;
 
 // =========================================================================
-// SOLUSI UTAMA: KONFIGURASI STUN + TURN SERVER LENGKAP UNTUK JARINGAN SELULER
+// KONFIGURASI STUN & TURN SERVER TERUJI UNTUK RAILWAY & SELULER INDONESIA
 // =========================================================================
 const rtcConfig = {
   iceServers: [
-    // STUN Servers untuk Koneksi Langsung (Wi-Fi / LAN)
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun2.l.google.com:19302' },
     { urls: 'stun:stun3.l.google.com:19302' },
     { urls: 'stun:stun4.l.google.com:19302' },
     { urls: 'stun:global.stun.twilio.com:3478' },
-
-    // TURN Servers (Relay) Wajib untuk Jaringan Seluler (Telkomsel, Indosat, XL, dll.)
+    // TURN Server Relay Multi-Port (Sangat Handal untuk Telkomsel, Indosat, XL, Tri)
     {
-      urls: "turn:openrelay.metered.ca:80",
-      username: "openrelayproject",
-      credential: "openrelayproject"
-    },
-    {
-      urls: "turn:openrelay.metered.ca:443",
-      username: "openrelayproject",
-      credential: "openrelayproject"
-    },
-    {
-      urls: "turn:openrelay.metered.ca:443?transport=tcp", // Menembus Firewall / NAT Seluler Ketat
+      urls: [
+        "turn:openrelay.metered.ca:80",
+        "turn:openrelay.metered.ca:443",
+        "turn:openrelay.metered.ca:443?transport=tcp"
+      ],
       username: "openrelayproject",
       credential: "openrelayproject"
     }
   ],
-  iceTransportPolicy: 'all', // Mengizinkan fallback otomatis ke TURN
-  iceCandidatePoolSize: 10
+  iceTransportPolicy: 'all',
+  bundlePolicy: 'max-bundle',
+  rtcpMuxPolicy: 'require'
 };
 
 // AUTO CHECK SESSION
@@ -267,7 +260,7 @@ function appendMessage(text, isPrivate = false) {
   chatBox.scrollTop = chatBox.scrollHeight;
 }
 
-// --- WEBRTC MULTI-PARTY CALL SYSTEM ---
+// --- WEBRTC CORE (DILENGKAPI KELOLA CANDIDATE BUFFERING) ---
 function initWebRTCListeners() {
   socket.on('incoming_call', async (data) => {
     const callerName = data.callerProfile.fullName || data.from;
@@ -281,12 +274,8 @@ function initWebRTCListeners() {
     const pc = await createPeerConnection(data.from, callerName);
     await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
     
-    if (pendingCandidates[data.from]) {
-      for (let cand of pendingCandidates[data.from]) {
-        try { await pc.addIceCandidate(new RTCIceCandidate(cand)); } catch(e){}
-      }
-      delete pendingCandidates[data.from];
-    }
+    // Process Queued Candidates
+    await processPendingCandidates(data.from, pc);
 
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
@@ -298,22 +287,17 @@ function initWebRTCListeners() {
     const pc = peerConnections[data.from];
     if (pc) {
       await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
-      if (pendingCandidates[data.from]) {
-        for (let cand of pendingCandidates[data.from]) {
-          try { await pc.addIceCandidate(new RTCIceCandidate(cand)); } catch(e){}
-        }
-        delete pendingCandidates[data.from];
-      }
+      await processPendingCandidates(data.from, pc);
     }
   });
 
   socket.on('receive_ice_candidate', async (data) => {
     const pc = peerConnections[data.from];
-    if (pc && pc.remoteDescription) {
+    if (pc && pc.remoteDescription && pc.remoteDescription.type) {
       try {
         await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
       } catch (e) {
-        console.error('ICE Candidate error:', e);
+        console.error('Gagal tambah candidate:', e);
       }
     } else {
       if (!pendingCandidates[data.from]) pendingCandidates[data.from] = [];
@@ -328,13 +312,26 @@ function initWebRTCListeners() {
   socket.on('call_failed', (data) => alert(data.message));
 }
 
+async function processPendingCandidates(username, pc) {
+  if (pendingCandidates[username] && pendingCandidates[username].length > 0) {
+    for (let cand of pendingCandidates[username]) {
+      try {
+        await pc.addIceCandidate(new RTCIceCandidate(cand));
+      } catch (e) {
+        console.error('Error pending candidate:', e);
+      }
+    }
+    delete pendingCandidates[username];
+  }
+}
+
 async function getLocalStream() {
   if (!localStream) {
     try {
       localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       localVideo.srcObject = localStream;
     } catch (err) {
-      alert('Gagal mengakses Kamera/Mikrofon! Pastikan izin kamera aktif dan aplikasi dibuka menggunakan HTTPS.');
+      alert('Gagal mengakses Kamera/Mikrofon! Izinkan akses perangkat.');
       throw err;
     }
   }
@@ -350,10 +347,10 @@ async function createPeerConnection(targetUser, displayName) {
   const pc = new RTCPeerConnection(rtcConfig);
   peerConnections[targetUser] = pc;
 
-  // Track stream audio & video
+  // Tambah audio & video track lokal
   stream.getTracks().forEach(track => pc.addTrack(track, stream));
 
-  // Menangkap stream lawan bicara secara otomatis
+  // Tangkap stream lawan bicara
   pc.ontrack = (event) => {
     let remoteStream = event.streams && event.streams[0];
     if (!remoteStream) {
@@ -366,6 +363,13 @@ async function createPeerConnection(targetUser, displayName) {
   pc.onicecandidate = (event) => {
     if (event.candidate) {
       socket.emit('send_ice_candidate', { to: targetUser, candidate: event.candidate });
+    }
+  };
+
+  pc.oniceconnectionstatechange = () => {
+    console.log(`Status koneksi ICE (${targetUser}):`, pc.iceConnectionState);
+    if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
+      pc.restartIce();
     }
   };
 
@@ -411,12 +415,13 @@ function addOrUpdateRemoteVideo(username, displayName, stream) {
 
   if (video && video.srcObject !== stream) {
     video.srcObject = stream;
-    // Penanganan play() otomatis pada perangkat seluler
+    
+    // Penanganan Autoplay Browser HP
     const playPromise = video.play();
     if (playPromise !== undefined) {
       playPromise.catch(() => {
-        video.muted = true; // Mute sejenak jika terblokir autoplay policy seluler
-        video.play();
+        video.muted = true;
+        video.play().catch(e => console.log("Gagal memutar video:", e));
       });
     }
   }
