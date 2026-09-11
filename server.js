@@ -6,16 +6,16 @@ const path = require('path');
 const app = express();
 const server = http.createServer(app);
 
-// Meningkatkan buffer size Socket.io agar aman saat menerima payload data
+// Konfigurasi Socket.io
 const io = new Server(server, {
   cors: { origin: "*", methods: ["GET", "POST"] },
-  maxHttpBufferSize: 1e7 // Maksimal 10MB
+  maxHttpBufferSize: 1e7 // Maksimal buffer 10MB
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Penyimpanan Data Sementara di Memori Server
-const users = {}; // { username: { password, fullName, age, birthYear, photo } }
+// Data sementara di memori server
+const users = {};          // { username: { password, fullName, age, birthYear, photo } }
 const connectedUsers = {}; // { username: socketId }
 
 io.on('connection', (socket) => {
@@ -28,17 +28,16 @@ io.on('connection', (socket) => {
         return socket.emit('register_response', { success: false, message: 'Username & Password wajib diisi!' });
       }
       if (users[username]) {
-        return socket.emit('register_response', { success: false, message: 'Username sudah digunakan!' });
+        return socket.emit('register_response', { success: false, message: 'Username sudah terdaftar!' });
       }
       users[username] = { password, fullName: '', age: '', birthYear: '', photo: '' };
-      socket.emit('register_response', { success: true, message: 'Registrasi berhasil! Silakan lengkapi profil.' });
+      socket.emit('register_response', { success: true, message: 'Registrasi berhasil! Silakan isi profil.' });
     } catch (err) {
-      console.error('Error register:', err);
-      socket.emit('register_response', { success: false, message: 'Terjadi kesalahan sistem saat registrasi.' });
+      socket.emit('register_response', { success: false, message: 'Gagal melakukan registrasi.' });
     }
   });
 
-  // 2. LOGIN MANUAL & AUTOMATIC GMAIL LOGIN
+  // 2. LOGIN MANUAL & GOOGLE
   socket.on('login_account', ({ username, password, isGoogle, googleProfile }) => {
     try {
       if (isGoogle && googleProfile) {
@@ -54,56 +53,42 @@ io.on('connection', (socket) => {
         }
         socket.username = gUsername;
         connectedUsers[gUsername] = socket.id;
-        return socket.emit('login_response', { 
-          success: true, 
-          username: gUsername, 
-          profile: users[gUsername] 
-        });
+        return socket.emit('login_response', { success: true, username: gUsername, profile: users[gUsername] });
       }
 
       if (users[username] && users[username].password === password) {
         connectedUsers[username] = socket.id;
         socket.username = username;
-        socket.emit('login_response', { 
-          success: true, 
-          username: username, 
-          profile: users[username] 
-        });
+        socket.emit('login_response', { success: true, username: username, profile: users[username] });
       } else {
         socket.emit('login_response', { success: false, message: 'Username atau Password salah!' });
       }
     } catch (err) {
-      console.error('Error login:', err);
-      socket.emit('login_response', { success: false, message: 'Terjadi kesalahan saat login.' });
+      socket.emit('login_response', { success: false, message: 'Gagal melakukan login.' });
     }
   });
 
-  // 3. SIMPAN PROFIL (NAMA, UMUR, TAHUN LAHIR, FOTO)
+  // 3. UPDATE PROFIL
   socket.on('update_profile', ({ fullName, age, birthYear, photo }) => {
     try {
       if (socket.username && users[socket.username]) {
         users[socket.username].fullName = fullName || socket.username;
         users[socket.username].age = age || '-';
         users[socket.username].birthYear = birthYear || '-';
-        if (photo) {
-          users[socket.username].photo = photo;
-        }
+        if (photo) users[socket.username].photo = photo;
 
         socket.emit('profile_updated', { success: true, profile: users[socket.username] });
         broadcastUserList();
       } else {
-        socket.emit('profile_updated', { success: false, message: 'Sesi login tidak ditemukan. Silakan login ulang.' });
+        socket.emit('profile_updated', { success: false, message: 'Sesi habis, silakan login ulang.' });
       }
     } catch (err) {
-      console.error('Error update profile:', err);
-      socket.emit('profile_updated', { success: false, message: 'Gagal menyimpan profil.' });
+      socket.emit('profile_updated', { success: false, message: 'Gagal memperbarui profil.' });
     }
   });
 
-  // 4. DAFTAR USER AKTIF
-  socket.on('get_user_list', () => {
-    sendUserList(socket);
-  });
+  // 4. DAFTAR USER ONLINE
+  socket.on('get_user_list', () => sendUserList(socket));
 
   function broadcastUserList() {
     io.emit('user_list_updated', getUserListData());
@@ -129,18 +114,30 @@ io.on('connection', (socket) => {
     return list;
   }
 
-  // 5. CHAT TEKS 1-ON-1
-  socket.on('send_private_message', ({ to, message }) => {
-    const targetSocketId = connectedUsers[to];
-    if (targetSocketId) {
-      io.to(targetSocketId).emit('receive_private_message', {
+  // 5. CHAT (GLOBAL & PRIVATE)
+  socket.on('send_chat', ({ to, message }) => {
+    const senderName = (users[socket.username] && users[socket.username].fullName) ? users[socket.username].fullName : socket.username;
+
+    if (to && connectedUsers[to]) {
+      // Private Message
+      io.to(connectedUsers[to]).emit('receive_chat', {
         from: socket.username,
-        message: message
+        senderName: senderName,
+        message: message,
+        isPrivate: true
+      });
+    } else {
+      // Global Broadcast
+      io.emit('receive_chat', {
+        from: socket.username,
+        senderName: senderName,
+        message: message,
+        isPrivate: false
       });
     }
   });
 
-  // 6. WEBRTC SIGNALING 1-ON-1 (FACE TO FACE)
+  // 6. WEBRTC SIGNALING (VIDEO CALL)
   socket.on('call_user', ({ userToCall, offer }) => {
     const targetSocketId = connectedUsers[userToCall];
     if (targetSocketId) {
@@ -150,7 +147,7 @@ io.on('connection', (socket) => {
         offer: offer
       });
     } else {
-      socket.emit('call_failed', { message: `Pengguna '${userToCall}' sedang offline atau tidak dapat dijangkau.` });
+      socket.emit('call_failed', { message: `Pengguna '${userToCall}' sedang tidak aktif.` });
     }
   });
 
@@ -186,5 +183,5 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`Server Face to Face berjalan stabil di http://localhost:${PORT}`);
+  console.log(`Server aktif di port ${PORT}`);
 });
