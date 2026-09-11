@@ -3,140 +3,143 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Aplikasi Obrolan & Panggilan Video Group</title>
+  <title>Aplikasi Obrolan & Panggilan Video</title>
+  
+  <!-- CSS Utama -->
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Google Sign-In SDK -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <style>
-    * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-    body { background-color: #f4f6f9; margin: 0; padding: 15px; display: flex; justify-content: center; }
-    .container { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 1000px; }
-    .hidden { display: none !important; }
-    .input-group { margin-bottom: 12px; }
-    input[type="text"], input[type="password"], input[type="number"] { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 6px; }
-    .btn { padding: 8px 14px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; color: white; margin-top: 5px; transition: background 0.2s; font-size: 13px; }
-    .btn-primary { background-color: #007bff; }
-    .btn-primary:hover { background-color: #0056b3; }
-    .btn-secondary { background-color: #6c757d; }
-    .btn-secondary:hover { background-color: #545b62; }
-    .btn-success { background-color: #28a745; }
-    .btn-success:hover { background-color: #1e7e34; }
-    .btn-warning { background-color: #ffc107; color: #000; }
-    .btn-danger { background-color: #dc3545; }
-
-    /* Grid Pengguna Online */
-    .user-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 15px; margin: 15px 0; }
-    .user-card { border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; text-align: center; background: #ffffff; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); transition: transform 0.2s ease, box-shadow 0.2s ease; }
-    .user-card:hover { transform: translateY(-3px); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); }
-    .user-card img { width: 80px; height: 80px; border-radius: 50%; object-fit: cover; margin-bottom: 10px; border: 3px solid #007bff; }
-    .user-card h4 { margin: 5px 0 3px 0; font-size: 15px; }
-    .user-card p { margin: 0; font-size: 12px; color: #666; }
-    .card-actions { display: flex; flex-direction: column; gap: 5px; margin-top: 10px; }
-
-    /* Layout Video Call Multi-User */
-    .f2f-video-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin-bottom: 15px; }
-    .video-card { background: #000; border-radius: 10px; overflow: hidden; position: relative; aspect-ratio: 4 / 3; }
-    video { width: 100%; height: 100%; object-fit: cover; background: #111; }
-    .video-label { position: absolute; bottom: 8px; left: 8px; background: rgba(0,0,0,0.6); color: #fff; padding: 3px 8px; border-radius: 4px; font-size: 12px; }
-
-    /* Chat Box */
-    #chat-box { height: 220px; border: 1px solid #ddd; border-radius: 6px; overflow-y: auto; padding: 12px; background: #fafafa; margin-bottom: 10px; }
-    .msg { margin-bottom: 8px; word-break: break-word; font-size: 14px; line-height: 1.4; }
-    .msg-private { color: #d63384; font-weight: bold; background: #fff0f5; padding: 4px 8px; border-radius: 4px; display: inline-block; }
-    .controls-bar { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-bottom: 15px; padding: 10px; background: #eee; border-radius: 8px; }
-  </style>
 </head>
 <body>
 
-<div class="container">
-  <h2>Aplikasi Obrolan & Panggilan Video</h2>
+  <div class="container">
+    <!-- HEADER APLIKASI -->
+    <h2>Aplikasi Obrolan & Panggilan Video</h2>
 
-  <!-- FORM LOGIN / DAFTAR -->
-  <div id="authSection">
-    <h3>Masuk / Daftar Akun</h3>
-    <div class="input-group">
-      <label>Username</label>
-      <input type="text" id="authUsername" placeholder="Masukkan username">
-    </div>
-    <div class="input-group">
-      <label>Password</label>
-      <input type="password" id="authPassword" placeholder="Masukkan password">
-    </div>
-    <button class="btn btn-primary" onclick="login()">Masuk (Login)</button>
-    <button class="btn btn-secondary" onclick="register()">Daftar Baru</button>
-    
-    <hr style="margin: 20px 0;">
-    <div style="display: flex; justify-content: center;">
-      <div id="g_id_onload" data-client_id="YOUR_GOOGLE_CLIENT_ID" data-callback="handleCredentialResponse"></div>
-      <div class="g_id_signin" data-type="standard"></div>
-    </div>
-  </div>
+    <!-- =================================================================== -->
+    <!-- SECTION 1: AUTENTIKASI (LOGIN / REGISTER)                          -->
+    <!-- =================================================================== -->
+    <div id="authSection">
+      <h3>Masuk / Daftar Akun</h3>
+      
+      <div style="margin-bottom: 15px;">
+        <label for="authUsername" style="display:block; font-weight:600; margin-bottom:5px;">Username</label>
+        <input type="text" id="authUsername" placeholder="Masukkan username">
+      </div>
 
-  <!-- FORM LENGKAPI PROFIL -->
-  <div id="profileSection" class="hidden">
-    <h3>Lengkapi Data Profil</h3>
-    <div class="input-group">
-      <label>Nama Lengkap</label>
-      <input type="text" id="profFullName" placeholder="Nama Lengkap">
-    </div>
-    <div class="input-group">
-      <label>Umur</label>
-      <input type="number" id="profAge" placeholder="Contoh: 25">
-    </div>
-    <div class="input-group">
-      <label>Tahun Lahir</label>
-      <input type="number" id="profBirthYear" placeholder="Contoh: 1998">
-    </div>
-    <div class="input-group">
-      <label>Upload Foto Profil</label>
-      <input type="file" id="profPhotoInput" accept="image/*">
-      <div id="uploadStatus" style="font-size: 12px; color: green; margin-top: 4px;"></div>
-    </div>
-    <button id="btnSaveProfile" class="btn btn-success" onclick="saveProfile()">Simpan & Lanjutkan</button>
-  </div>
+      <div style="margin-bottom: 15px;">
+        <label for="authPassword" style="display:block; font-weight:600; margin-bottom:5px;">Password</label>
+        <input type="password" id="authPassword" placeholder="Masukkan password">
+      </div>
 
-  <!-- HALAMAN UTAMA -->
-  <div id="mainSection" class="hidden">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; background: #eef2f7; padding: 10px 15px; border-radius: 8px;">
-      <p style="margin: 0;">Halo, <b id="displayUsername" style="color: #007bff;"></b></p>
-      <div>
-        <button class="btn btn-secondary" onclick="editProfile()">Edit Profil</button>
-        <button class="btn btn-danger" onclick="logout()">Log Out</button>
+      <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+        <button class="btn btn-primary" onclick="login()">Masuk (Login)</button>
+        <button class="btn btn-secondary" onclick="register()">Daftar Baru</button>
+      </div>
+
+      <hr style="border:0; border-top: 1px solid #e2e8f0; margin: 20px 0;">
+
+      <!-- Google Sign-In Button -->
+      <div style="display: flex; justify-content: center;">
+        <div id="g_id_onload"
+             data-client_id="YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com"
+             data-callback="handleCredentialResponse">
+        </div>
+        <div class="g_id_signin" data-type="standard" data-theme="outline" data-text="sign_in_with"></div>
       </div>
     </div>
 
-    <!-- AREA VIDEO CALL -->
-    <div id="callContainer" class="hidden">
-      <div class="controls-bar">
-        <button id="btnMuteMic" class="btn btn-warning" onclick="toggleMic()">Mute Mic</button>
-        <button id="btnMuteCam" class="btn btn-warning" onclick="toggleCam()">Matikan Kamera</button>
-        <button class="btn btn-danger" onclick="endCall()">Akhiri Panggilan</button>
+    <!-- =================================================================== -->
+    <!-- SECTION 2: PENGISIAN PROFIL PENGGUNA                                -->
+    <!-- =================================================================== -->
+    <div id="profileSection" class="hidden">
+      <h3>Lengkapi Profil Anda</h3>
+      <p style="font-size: 13px; color: #666; margin-bottom: 15px;">Silakan lengkapi informasi diri Anda untuk melanjutkan.</p>
+
+      <div style="margin-bottom: 15px;">
+        <label for="profFullName" style="display:block; font-weight:600; margin-bottom:5px;">Nama Lengkap</label>
+        <input type="text" id="profFullName" placeholder="Masukkan nama lengkap">
       </div>
 
-      <div id="videoGrid" class="f2f-video-container">
-        <div class="video-card" id="card-local">
-          <video id="localVideo" autoplay playsinline muted></video>
-          <div class="video-label">Saya (Lokal)</div>
+      <div style="margin-bottom: 15px;">
+        <label for="profAge" style="display:block; font-weight:600; margin-bottom:5px;">Umur</label>
+        <input type="number" id="profAge" placeholder="Contoh: 25">
+      </div>
+
+      <div style="margin-bottom: 15px;">
+        <label for="profBirthYear" style="display:block; font-weight:600; margin-bottom:5px;">Tahun Lahir</label>
+        <input type="number" id="profBirthYear" placeholder="Contoh: 1999">
+      </div>
+
+      <div style="margin-bottom: 20px;">
+        <label for="profPhotoInput" style="display:block; font-weight:600; margin-bottom:5px;">Foto Profil</label>
+        <input type="file" id="profPhotoInput" accept="image/*">
+        <div id="uploadStatus" style="font-size:12px; color:#0072ff; margin-top:5px;"></div>
+      </div>
+
+      <button class="btn btn-primary" id="btnSaveProfile" onclick="saveProfile()">Simpan & Lanjutkan</button>
+    </div>
+
+    <!-- =================================================================== -->
+    <!-- SECTION 3: DASHBOARD UTAMA (VIDEO CALL & CHAT)                      -->
+    <!-- =================================================================== -->
+    <div id="mainSection" class="hidden">
+      <!-- Status User Logged In -->
+      <div style="display: flex; justify-content: space-between; align-items: center; background: #f1f5f9; padding: 12px 18px; border-radius: 10px; margin-bottom: 20px;">
+        <div>
+          <span>Halo, <strong id="displayUsername" style="color: #0072ff;">-</strong></span>
+        </div>
+        <div>
+          <button class="btn btn-secondary" style="font-size:12px; padding:6px 12px;" onclick="editProfile()">Edit Profil</button>
+          <button class="btn btn-danger" style="font-size:12px; padding:6px 12px;" onclick="logout()">Log Out</button>
         </div>
       </div>
-    </div>
 
-    <!-- DAFTAR PENGGUNA ONLINE -->
-    <h3>Daftar Pengguna Online</h3>
-    <div id="userGrid" class="user-grid"></div>
+      <!-- AREA PANGGILAN VIDEO -->
+      <div id="callContainer" class="hidden" style="margin-bottom: 25px;">
+        <div style="display: flex; gap: 10px; justify-content: center; margin-bottom: 15px; background: #e2e8f0; padding: 10px; border-radius: 8px;">
+          <button class="btn btn-warning" id="btnMuteMic" onclick="toggleMic()">Mute Mic</button>
+          <button class="btn btn-warning" id="btnMuteCam" onclick="toggleCam()">Matikan Kamera</button>
+          <button class="btn btn-danger" onclick="endCall()">Akhiri Panggilan</button>
+        </div>
 
-    <!-- OBROLAN CHAT -->
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px;">
-      <h3 id="chatHeader" style="margin: 0;">Obrolan Teks (Publik)</h3>
-      <button id="btnResetChatTarget" class="btn btn-secondary hidden" style="font-size: 11px;" onclick="resetChatTarget()">Kirim ke Semua (Publik)</button>
-    </div>
-    <div id="chat-box" style="margin-top: 10px;"></div>
-    <div class="input-group" style="display: flex; gap: 10px;">
-      <input type="text" id="msgInput" placeholder="Ketik pesan..." onkeypress="if(event.key==='Enter') sendChatMessage()">
-      <button class="btn btn-primary" onclick="sendChatMessage()">Kirim</button>
+        <div class="video-grid" id="videoGrid">
+          <!-- Video Kamera Lokal Saya -->
+          <div class="video-card" id="card-local">
+            <video id="localVideo" autoplay playsinline muted></video>
+            <div class="video-label">Saya (Lokal)</div>
+          </div>
+          <!-- Video Lawan Bicara Akan Muncul Secara Dinamis Di Sini -->
+        </div>
+      </div>
+
+      <!-- DAFTAR PENGGUNA ONLINE -->
+      <h3 style="margin-top: 20px;">Daftar Pengguna Online</h3>
+      <div class="user-grid" id="userGrid" style="margin-bottom: 25px;">
+        <!-- Pengguna lain akan dimasukkan secara otomatis oleh Socket.IO -->
+      </div>
+
+      <!-- OBROLAN TEKS & DM PRIVAT -->
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h3 id="chatHeader">Obrolan Teks (Publik)</h3>
+        <button id="btnResetChatTarget" class="btn btn-secondary hidden" style="font-size:11px;" onclick="resetChatTarget()">Kembali ke Chat Publik</button>
+      </div>
+
+      <div id="chat-box"></div>
+
+      <div style="display: flex; gap: 10px;">
+        <input type="text" id="msgInput" placeholder="Ketik pesan..." style="margin-bottom: 0;" onkeypress="if(event.key==='Enter') sendChatMessage()">
+        <button class="btn btn-primary" onclick="sendChatMessage()">Kirim</button>
+      </div>
     </div>
   </div>
-</div>
 
-<script src="/socket.io/socket.io.js"></script>
-<script src="app.js"></script>
+  <!-- Socket.IO Client Library -->
+  <script src="/socket.io/socket.io.js"></script>
+  
+  <!-- App Logic JavaScript -->
+  <script src="app.js"></script>
+
 </body>
 </html>
