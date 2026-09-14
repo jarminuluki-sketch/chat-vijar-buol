@@ -3,17 +3,31 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Aplikasi Obrolan & Video Call</title>
+  <title>Aplikasi Chat dan VC</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
   <div class="container">
-    <h2>Aplikasi Obrolan & Video Call</h2>
+    
+    <!-- 1. LANDING / WELCOME SCREEN -->
+    <div id="welcomeSection">
+      <div class="welcome-banner">
+        <img src="welcome-banner.png" alt="APP Chat dan VC" class="welcome-img">
+      </div>
+      <div style="text-align: center; margin: 15px 0 20px 0;">
+        <h3 style="margin-bottom: 8px;">Selamat Datang!</h3>
+        <p style="font-size: 13px; color: #666; line-height: 1.5;">
+          Nikmati kemudahan berkomunikasi secara real-time melalui obrolan teks dan panggilan video interaktif dalam satu aplikasi.
+        </p>
+      </div>
+      <button type="button" class="btn btn-primary" style="width: 100%; padding: 12px; font-size: 15px;" onclick="goToAuth()">Mulai</button>
+    </div>
 
-    <!-- AUTHENTICATION SECTION -->
-    <div id="authSection">
-      <h3>Masuk / Daftar Akun</h3>
+    <!-- 2. AUTHENTICATION SECTION (LOGIN / DAFTAR) -->
+    <div id="authSection" class="hidden">
+      <button type="button" class="btn btn-secondary" style="font-size: 11px; padding: 4px 8px; margin-bottom: 12px;" onclick="backToWelcome()">← Kembali</button>
+      <h2>Masuk / Daftar Akun</h2>
       <div style="margin-bottom: 15px;">
         <label for="authUsername" style="display:block; font-weight:600; margin-bottom:5px;">Username</label>
         <input type="text" id="authUsername" placeholder="Masukkan username">
@@ -22,13 +36,13 @@
         <label for="authPassword" style="display:block; font-weight:600; margin-bottom:5px;">Password</label>
         <input type="password" id="authPassword" placeholder="Masukkan password">
       </div>
-      <div style="display: flex; gap: 10px; margin-bottom: 20px;">
-        <button type="button" class="btn btn-primary" onclick="login()">Masuk (Login)</button>
-        <button type="button" class="btn btn-secondary" onclick="register()">Daftar Baru</button>
+      <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+        <button type="button" class="btn btn-primary" style="flex:1;" onclick="login()">Masuk (Login)</button>
+        <button type="button" class="btn btn-secondary" style="flex:1;" onclick="register()">Daftar Baru</button>
       </div>
     </div>
 
-    <!-- PROFILE FORM SECTION -->
+    <!-- 3. FORM PROFIL -->
     <div id="profileSection" class="hidden">
       <h3>Lengkapi Profil Anda</h3>
       <div style="margin-bottom: 15px;">
@@ -48,10 +62,10 @@
         <input type="file" id="profPhotoInput" accept="image/*">
         <div id="uploadStatus" style="font-size:12px; color:#0072ff; margin-top:5px;"></div>
       </div>
-      <button type="button" class="btn btn-primary" onclick="saveProfile()">Simpan & Lanjutkan</button>
+      <button type="button" class="btn btn-primary" style="width:100%;" onclick="saveProfile()">Simpan & Lanjutkan</button>
     </div>
 
-    <!-- MAIN DASHBOARD -->
+    <!-- 4. DASHBOARD UTAMA -->
     <div id="mainSection" class="hidden">
       
       <!-- WEBRTC VIDEO CALL DISPLAY -->
@@ -69,13 +83,13 @@
         </div>
       </div>
 
-      <!-- TAB 1: HOME -->
+      <!-- TAB 1: HOME (PENGGUNA AKTIF) -->
       <div id="tab-home" class="tab-content">
         <h3 style="margin-bottom: 15px;">Pengguna Aktif</h3>
         <div class="user-grid" id="userGrid"></div>
       </div>
 
-      <!-- TAB 2: OBROLAN -->
+      <!-- TAB 2: OBROLAN TEKS -->
       <div id="tab-chat" class="tab-content hidden">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 15px;">
           <h3 id="chatHeader">Obrolan Teks (Publik)</h3>
