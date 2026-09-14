@@ -159,4 +159,4 @@ function broadcastOnlineUsers() {
 }
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Server jalan di port ${PORT}`));
+server.listen(PORT, () => console.log(`Server aktif pada port ${PORT}`));
