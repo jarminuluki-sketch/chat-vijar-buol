@@ -80,7 +80,7 @@ textarea {
   color: white;
 }
 
-/* KARTU PENGGUNA AKTIF (HOME) */
+/* CARDS USER ACTIVE (HOME) */
 .user-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
@@ -134,7 +134,7 @@ textarea {
   flex: 1;
 }
 
-/* CHAT BOX */
+/* CHAT DISPLAY */
 #chat-box {
   background: #f8fafc;
   border: 1px solid #e2e8f0;
@@ -188,7 +188,7 @@ textarea {
   font-size: 14px;
 }
 
-/* BOTTOM NAVIGATION BAR FIXED */
+/* FIXED NAVIGATION BAR */
 .bottom-nav {
   position: fixed;
   bottom: 0;
@@ -228,7 +228,7 @@ textarea {
   margin-bottom: 3px;
 }
 
-/* WEBRTC VIDEO CALL */
+/* WEBRTC LAYOUT */
 .video-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
