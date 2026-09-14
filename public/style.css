@@ -1,152 +1,147 @@
-/* Reset & Fondasi Utama */
 * {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
-  font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
-/* Latar Belakang Gradasi Biru Cerah & Merah Modern */
 body {
-  background: linear-gradient(135deg, #00c6ff 0%, #0072ff 35%, #ff4b2b 85%, #ff416c 100%);
+  background: linear-gradient(135deg, #00c6ff 0%, #0072ff 35%, #ff4b2b 80%, #ff416c 100%);
   background-attachment: fixed;
   min-height: 100vh;
   display: flex;
   justify-content: center;
   align-items: center;
   padding: 20px;
-  color: #2c3e50;
+  color: #333;
 }
 
-/* Kontainer Utama (Card Efek Glassmorphism Mewah) */
-.container, .app-card, #authSection, #profileSection, #mainSection {
-  background: rgba(255, 255, 255, 0.94);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-radius: 18px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.22);
-  padding: 30px;
-  max-width: 900px;
+.container {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
+  padding: 25px;
+  max-width: 800px;
   width: 100%;
   margin: auto;
-  border: 1px solid rgba(255, 255, 255, 0.6);
+  position: relative;
+  padding-bottom: 80px; /* Jarak untuk Bottom Navigation */
 }
 
-/* Header & Judul */
-h2, h3, h4 {
+h2 {
   color: #1a2a3a;
-  margin-bottom: 15px;
-  font-weight: 700;
+  margin-bottom: 20px;
 }
 
-/* Form Input & Select */
 input[type="text"],
 input[type="password"],
 input[type="number"],
 select,
 textarea {
   width: 100%;
-  padding: 12px 16px;
+  padding: 12px 15px;
   margin-bottom: 15px;
   border: 1.5px solid #d0d7de;
-  border-radius: 10px;
+  border-radius: 8px;
   font-size: 14px;
-  transition: all 0.25s ease-in-out;
-  background: #ffffff;
 }
 
-input[type="text"]:focus,
-input[type="password"]:focus,
-input[type="number"]:focus,
-select:focus,
-textarea:focus {
-  border-color: #0072ff;
-  outline: none;
-  box-shadow: 0 0 10px rgba(0, 114, 255, 0.35);
-}
-
-/* Tombol-tombol (Buttons) */
 .btn {
-  padding: 10px 22px;
+  padding: 10px 18px;
   border: none;
-  border-radius: 10px;
+  border-radius: 8px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.25s ease;
-  display: inline-block;
-  text-align: center;
+  transition: transform 0.2s, box-shadow 0.2s;
 }
 
 .btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
 }
 
 .btn-primary {
   background: linear-gradient(45deg, #0072ff, #00c6ff);
-  color: #ffffff;
-}
-
-.btn-danger {
-  background: linear-gradient(45deg, #ff416c, #ff4b2b);
-  color: #ffffff;
-}
-
-.btn-warning {
-  background: #f39c12;
-  color: #ffffff;
+  color: white;
 }
 
 .btn-secondary {
   background: #6c757d;
-  color: #ffffff;
+  color: white;
 }
 
-.btn-success {
-  background: #2ecc71;
-  color: #ffffff;
+.btn-danger {
+  background: linear-gradient(45deg, #ff416c, #ff4b2b);
+  color: white;
 }
 
-/* Layout Grid Video & Kartu Pengguna */
-.video-grid, .user-grid {
+.btn-warning {
+  background: #f39c12;
+  color: white;
+}
+
+/* KARTU PENGGUNA AKTIF (GRID HOME) */
+.user-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 16px;
-  margin-top: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 15px;
 }
 
-.video-card, .user-card {
+.user-card {
   background: #ffffff;
-  border-radius: 14px;
+  border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 6px 16px rgba(0,0,0,0.08);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   border: 1px solid #e1e8ed;
-  padding: 15px;
-  text-align: center;
+  display: flex;
+  flex-direction: column;
 }
 
-.video-card video {
-  width: 100%;
+.user-card-img {
+  height: 140px;
+  background-size: cover;
+  background-position: center;
+  position: relative;
+}
+
+.status-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(46, 204, 113, 0.9);
+  color: white;
+  font-size: 10px;
+  font-weight: bold;
+  padding: 2px 8px;
   border-radius: 10px;
-  background-color: #000;
 }
 
-.user-card img {
-  width: 80px;
-  height: 80px;
-  border-radius: 50%;
-  object-fit: cover;
-  margin-bottom: 10px;
-  border: 3px solid #0072ff;
+.user-card-info {
+  padding: 12px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
-/* Area Chat Box */
+.user-card-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+}
+
+.user-card-actions .btn {
+  flex: 1;
+}
+
+/* CHAT BOX */
 #chat-box {
   background: #f8fafc;
   border: 1px solid #e2e8f0;
-  border-radius: 10px;
+  border-radius: 8px;
   padding: 15px;
-  height: 220px;
+  height: 280px;
   overflow-y: auto;
   margin-bottom: 12px;
 }
@@ -154,7 +149,7 @@ textarea:focus {
 .msg {
   padding: 8px 12px;
   margin-bottom: 8px;
-  border-radius: 8px;
+  border-radius: 6px;
   background: #e2e8f0;
   font-size: 14px;
 }
@@ -165,81 +160,9 @@ textarea:focus {
   border-left: 4px solid #ff416c;
 }
 
-.hidden {
-  display: none !important;
-}
-/* Tampilan Grid Pengguna (Sesuai Gambar 3) */
-.explore-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
-  padding-bottom: 70px; /* Jarak agar tidak tertutup Bottom Nav */
-}
-
-.user-card-explore {
-  position: relative;
-  height: 220px;
-  border-radius: 16px;
-  overflow: hidden;
-  background-size: cover;
-  background-position: center;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-.user-card-overlay {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, transparent 50%, rgba(0, 0, 0, 0.75) 100%);
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  padding: 10px;
-}
-
-.badge-status {
-  align-self: flex-start;
-  padding: 3px 8px;
-  border-radius: 12px;
-  font-size: 11px;
-  font-weight: bold;
-  color: white;
-  background: rgba(0, 0, 0, 0.4);
-}
-
-.badge-status.online::before {
-  content: '• ';
-  color: #2ecc71;
-}
-
-.user-info-bottom {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  color: white;
-}
-
-.user-info-bottom .name {
-  font-weight: bold;
-  font-size: 14px;
-}
-
-.btn-call-mini {
-  background: rgba(255, 255, 255, 0.25);
-  backdrop-filter: blur(5px);
-  border: none;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-}
-
-/* Bottom Navigation Bar (Fixed di Bawah Layar) */
+/* BOTTOM NAVIGATION BAR */
 .bottom-nav {
-  position: fixed;
+  position: absolute;
   bottom: 0;
   left: 0;
   right: 0;
@@ -248,9 +171,9 @@ textarea:focus {
   display: flex;
   justify-content: space-around;
   align-items: center;
-  border-top: 1px solid #e0e0e0;
-  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
-  z-index: 1000;
+  border-top: 1px solid #e2e8f0;
+  border-bottom-left-radius: 16px;
+  border-bottom-right-radius: 16px;
 }
 
 .nav-item {
@@ -266,50 +189,48 @@ textarea:focus {
 }
 
 .nav-item.active {
-  color: #ff416c; /* Warna aksen merah/pink cerah */
+  color: #0072ff;
   font-weight: bold;
 }
 
 .nav-icon {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   margin-bottom: 2px;
 }
 
-/* Card Menu Profil & Saldo (Sesuai Gambar 1) */
-.coin-card {
-  background: linear-gradient(135deg, #ff416c, #ff4b2b);
-  border-radius: 20px;
-  padding: 20px;
-  color: white;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 15px;
-}
-
-.coin-btn {
-  background: white;
-  color: #333;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 20px;
-  font-weight: bold;
-  cursor: pointer;
-}
-
-.menu-grid-profile {
+/* VIDEO CALL WEBRTC */
+.video-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 15px;
 }
 
-.menu-box {
-  background: #f8f9fa;
+.video-card {
+  position: relative;
+  background: #000;
   border-radius: 12px;
-  padding: 15px 10px;
-  text-align: center;
-  font-size: 12px;
-  color: #555;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+  height: 200px;
+}
+
+.video-card video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.video-label {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  background: rgba(0,0,0,0.6);
+  color: white;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.hidden {
+  display: none !important;
 }
