@@ -11,7 +11,7 @@
   <div class="container">
     <h2>Aplikasi Obrolan & Video Call</h2>
 
-    <!-- LOGIN / REGISTER -->
+    <!-- AUTHENTICATION SECTION -->
     <div id="authSection">
       <h3>Masuk / Daftar Akun</h3>
       <div style="margin-bottom: 15px;">
@@ -28,7 +28,7 @@
       </div>
     </div>
 
-    <!-- FORM PROFIL -->
+    <!-- PROFILE FORM SECTION -->
     <div id="profileSection" class="hidden">
       <h3>Lengkapi Profil Anda</h3>
       <div style="margin-bottom: 15px;">
@@ -51,10 +51,10 @@
       <button type="button" class="btn btn-primary" onclick="saveProfile()">Simpan & Lanjutkan</button>
     </div>
 
-    <!-- DASHBOARD UTAMA -->
+    <!-- MAIN DASHBOARD -->
     <div id="mainSection" class="hidden">
       
-      <!-- WEBRTC VIDEO CALL -->
+      <!-- WEBRTC VIDEO CALL DISPLAY -->
       <div id="callContainer" class="hidden" style="margin-bottom: 25px;">
         <div style="display: flex; gap: 10px; justify-content: center; margin-bottom: 15px; background: #e2e8f0; padding: 10px; border-radius: 8px;">
           <button type="button" class="btn btn-warning" id="btnMuteMic" onclick="toggleMic()">Mute Mic</button>
@@ -92,7 +92,7 @@
       <div id="tab-profile" class="tab-content hidden">
         <h3>Profil Saya</h3>
         <div class="profile-card">
-          <img id="myProfilePhoto" src="https://via.placeholder.com/100" class="profile-img">
+          <img id="myProfilePhoto" src="https://via.placeholder.com/100/0072ff/ffffff?text=User" class="profile-img">
           <div class="profile-details">
             <p><strong>Nama Lengkap:</strong> <span id="displayFullName">-</span></p>
             <p><strong>Username:</strong> <span id="displayUsername" style="color:#0072ff;">-</span></p>
@@ -109,7 +109,7 @@
     </div>
   </div>
 
-  <!-- NAVIGATION BAR BOTTOM FIXED -->
+  <!-- BOTTOM NAVIGATION BAR -->
   <nav id="bottomNav" class="bottom-nav hidden">
     <button type="button" class="nav-item active" id="nav-home" onclick="switchTab('home')">
       <svg class="nav-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
