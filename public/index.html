@@ -2,144 +2,134 @@
 <html lang="id">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Aplikasi Obrolan & Panggilan Video</title>
-  
-  <!-- CSS Utama -->
   <link rel="stylesheet" href="style.css">
-
-  <!-- Google Sign-In SDK -->
+  <!-- FontAwesome / RemixIcon untuk Ikon Modern -->
+  <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
   <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
 
-  <div class="container">
-    <!-- HEADER APLIKASI -->
-    <h2>Aplikasi Obrolan & Panggilan Video</h2>
-
-    <!-- =================================================================== -->
-    <!-- SECTION 1: AUTENTIKASI (LOGIN / REGISTER)                          -->
-    <!-- =================================================================== -->
-    <div id="authSection">
-      <h3>Masuk / Daftar Akun</h3>
-      
-      <div style="margin-bottom: 15px;">
-        <label for="authUsername" style="display:block; font-weight:600; margin-bottom:5px;">Username</label>
-        <input type="text" id="authUsername" placeholder="Masukkan username">
-      </div>
-
-      <div style="margin-bottom: 15px;">
-        <label for="authPassword" style="display:block; font-weight:600; margin-bottom:5px;">Password</label>
-        <input type="password" id="authPassword" placeholder="Masukkan password">
-      </div>
-
-      <div style="display: flex; gap: 10px; margin-bottom: 20px;">
-        <button class="btn btn-primary" onclick="login()">Masuk (Login)</button>
-        <button class="btn btn-secondary" onclick="register()">Daftar Baru</button>
-      </div>
-
-      <hr style="border:0; border-top: 1px solid #e2e8f0; margin: 20px 0;">
-
-      <!-- Google Sign-In Button -->
-      <div style="display: flex; justify-content: center;">
-        <div id="g_id_onload"
-             data-client_id="YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com"
-             data-callback="handleCredentialResponse">
-        </div>
-        <div class="g_id_signin" data-type="standard" data-theme="outline" data-text="sign_in_with"></div>
-      </div>
-    </div>
-
-    <!-- =================================================================== -->
-    <!-- SECTION 2: PENGISIAN PROFIL PENGGUNA                                -->
-    <!-- =================================================================== -->
-    <div id="profileSection" class="hidden">
-      <h3>Lengkapi Profil Anda</h3>
-      <p style="font-size: 13px; color: #666; margin-bottom: 15px;">Silakan lengkapi informasi diri Anda untuk melanjutkan.</p>
-
-      <div style="margin-bottom: 15px;">
-        <label for="profFullName" style="display:block; font-weight:600; margin-bottom:5px;">Nama Lengkap</label>
-        <input type="text" id="profFullName" placeholder="Masukkan nama lengkap">
-      </div>
-
-      <div style="margin-bottom: 15px;">
-        <label for="profAge" style="display:block; font-weight:600; margin-bottom:5px;">Umur</label>
-        <input type="number" id="profAge" placeholder="Contoh: 25">
-      </div>
-
-      <div style="margin-bottom: 15px;">
-        <label for="profBirthYear" style="display:block; font-weight:600; margin-bottom:5px;">Tahun Lahir</label>
-        <input type="number" id="profBirthYear" placeholder="Contoh: 1999">
-      </div>
-
-      <div style="margin-bottom: 20px;">
-        <label for="profPhotoInput" style="display:block; font-weight:600; margin-bottom:5px;">Foto Profil</label>
-        <input type="file" id="profPhotoInput" accept="image/*">
-        <div id="uploadStatus" style="font-size:12px; color:#0072ff; margin-top:5px;"></div>
-      </div>
-
-      <button class="btn btn-primary" id="btnSaveProfile" onclick="saveProfile()">Simpan & Lanjutkan</button>
-    </div>
-
-    <!-- =================================================================== -->
-    <!-- SECTION 3: DASHBOARD UTAMA (VIDEO CALL & CHAT)                      -->
-    <!-- =================================================================== -->
-    <div id="mainSection" class="hidden">
-      <!-- Status User Logged In -->
-      <div style="display: flex; justify-content: space-between; align-items: center; background: #f1f5f9; padding: 12px 18px; border-radius: 10px; margin-bottom: 20px;">
-        <div>
-          <span>Halo, <strong id="displayUsername" style="color: #0072ff;">-</strong></span>
-        </div>
-        <div>
-          <button class="btn btn-secondary" style="font-size:12px; padding:6px 12px;" onclick="editProfile()">Edit Profil</button>
-          <button class="btn btn-danger" style="font-size:12px; padding:6px 12px;" onclick="logout()">Log Out</button>
-        </div>
-      </div>
-
-      <!-- AREA PANGGILAN VIDEO -->
-      <div id="callContainer" class="hidden" style="margin-bottom: 25px;">
-        <div style="display: flex; gap: 10px; justify-content: center; margin-bottom: 15px; background: #e2e8f0; padding: 10px; border-radius: 8px;">
-          <button class="btn btn-warning" id="btnMuteMic" onclick="toggleMic()">Mute Mic</button>
-          <button class="btn btn-warning" id="btnMuteCam" onclick="toggleCam()">Matikan Kamera</button>
-          <button class="btn btn-danger" onclick="endCall()">Akhiri Panggilan</button>
-        </div>
-
-        <div class="video-grid" id="videoGrid">
-          <!-- Video Kamera Lokal Saya -->
-          <div class="video-card" id="card-local">
-            <video id="localVideo" autoplay playsinline muted></video>
-            <div class="video-label">Saya (Lokal)</div>
-          </div>
-          <!-- Video Lawan Bicara Akan Muncul Secara Dinamis Di Sini -->
-        </div>
-      </div>
-
-      <!-- DAFTAR PENGGUNA ONLINE -->
-      <h3 style="margin-top: 20px;">Daftar Pengguna Online</h3>
-      <div class="user-grid" id="userGrid" style="margin-bottom: 25px;">
-        <!-- Pengguna lain akan dimasukkan secara otomatis oleh Socket.IO -->
-      </div>
-
-      <!-- OBROLAN TEKS & DM PRIVAT -->
-      <div style="display:flex; justify-content:space-between; align-items:center;">
-        <h3 id="chatHeader">Obrolan Teks (Publik)</h3>
-        <button id="btnResetChatTarget" class="btn btn-secondary hidden" style="font-size:11px;" onclick="resetChatTarget()">Kembali ke Chat Publik</button>
-      </div>
-
-      <div id="chat-box"></div>
-
-      <div style="display: flex; gap: 10px;">
-        <input type="text" id="msgInput" placeholder="Ketik pesan..." style="margin-bottom: 0;" onkeypress="if(event.key==='Enter') sendChatMessage()">
-        <button class="btn btn-primary" onclick="sendChatMessage()">Kirim</button>
-      </div>
-    </div>
+  <!-- LAYER AUTHENTICATION (LOGIN) -->
+  <div id="authSection" class="auth-container">
+    <h2>Masuk / Daftar Akun</h2>
+    <input type="text" id="authUsername" placeholder="Masukkan username">
+    <input type="password" id="authPassword" placeholder="Masukkan password">
+    <button class="btn btn-primary" onclick="login()">Masuk (Login)</button>
+    <button class="btn btn-secondary" onclick="register()">Daftar Baru</button>
   </div>
 
-  <!-- Socket.IO Client Library -->
-  <script src="/socket.io/socket.io.js"></script>
-  
-  <!-- App Logic JavaScript -->
-  <script src="app.js"></script>
+  <!-- LAYER APLIKASI UTAMA (SETELAH LOGIN) -->
+  <div id="mainSection" class="app-main hidden">
 
+    <!-- TAB 1: JELAJAHI / BERANDA (Gambar 3) -->
+    <div id="tab-home" class="tab-content active">
+      <div class="header-nav">
+        <span class="active-title">Jelajahi</span>
+        <span class="sub-title">🔥 Populer</span>
+      </div>
+      
+      <!-- Grid Pengguna Online -->
+      <div class="user-grid-cards" id="userGrid">
+        <!-- Kartu pengguna dimasukkan via JavaScript -->
+      </div>
+    </div>
+
+    <!-- TAB 2: PANGGILAN VIDEO / MATCH (Gambar 2) -->
+    <div id="tab-call" class="tab-content">
+      <div class="call-preview-screen">
+        <div class="coin-badge"><i class="ri-coin-line"></i> <span id="userCoins">0</span></div>
+        <div class="video-preview-box">
+          <video id="localVideo" autoplay playsinline muted></video>
+          <div class="video-overlay">
+            <button class="btn-start-call" onclick="startRandomCall()">
+              <i class="ri-video-chat-fill"></i> Mulai Call
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 3: OBROLAN / CHAT -->
+    <div id="tab-chat" class="tab-content">
+      <div class="header-nav">
+        <span class="active-title">Pesan</span>
+      </div>
+      <div id="chat-box" class="chat-container"></div>
+      <div class="chat-input-row">
+        <input type="text" id="msgInput" placeholder="Ketik pesan..." onkeypress="if(event.key==='Enter') sendChatMessage()">
+        <button onclick="sendChatMessage()"><i class="ri-send-plane-fill"></i></button>
+      </div>
+    </div>
+
+    <!-- TAB 4: PROFIL SAYA (Gambar 1) -->
+    <div id="tab-profile" class="tab-content">
+      <div class="profile-header">
+        <img id="myAvatar" src="https://via.placeholder.com/80" class="avatar-img" alt="Avatar">
+        <div class="profile-info">
+          <h3 id="displayUsername">Nama User</h3>
+          <span class="badge-tag">♂ 18</span>
+          <span class="badge-tag">Indonesia</span>
+        </div>
+      </div>
+
+      <!-- Card Koin -->
+      <div class="coin-card">
+        <div class="coin-balance">
+          <i class="ri-coin-fill gold-icon"></i>
+          <span id="profileCoins">0</span>
+        </div>
+        <button class="btn-get-coins">Dapatkan</button>
+      </div>
+
+      <!-- Card VIP -->
+      <div class="vip-card">
+        <span>👑 Bling VIP</span>
+        <span class="bonus-link">Bonus gratis &gt;</span>
+      </div>
+
+      <!-- Menu Grid -->
+      <div class="menu-grid">
+        <div class="menu-item"><i class="ri-gift-line"></i><span>Bonusnya</span></div>
+        <div class="menu-item"><i class="ri-wallet-3-line"></i><span>Credits</span></div>
+        <div class="menu-item"><i class="ri-box-3-line"></i><span>Kemasan</span></div>
+        <div class="menu-item"><i class="ri-star-line"></i><span>Tingkat</span></div>
+        <div class="menu-item"><i class="ri-user-add-line"></i><span>Undang</span></div>
+      </div>
+
+      <button class="btn-logout" onclick="logout()">Keluar Akun</button>
+    </div>
+
+    <!-- BOTTOM NAVIGATION BAR (NAVIGASI BAWAH) -->
+    <div class="bottom-nav">
+      <button class="nav-item active" onclick="switchTab('home', this)">
+        <i class="ri-home-5-line"></i>
+      </button>
+      <button class="nav-item" onclick="switchTab('call', this)">
+        <i class="ri-video-download-line"></i>
+      </button>
+      <button class="nav-item" onclick="switchTab('chat', this)">
+        <i class="ri-chat-3-line"></i>
+      </button>
+      <button class="nav-item" onclick="switchTab('profile', this)">
+        <i class="ri-user-3-line"></i>
+      </button>
+    </div>
+
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="app.js"></script>
+  <script>
+    // Fungsi untuk Pindah Tab Menu Bawah
+    function switchTab(tabName, el) {
+      document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+      document.querySelectorAll('.nav-item').forEach(btn => btn.classList.remove('active'));
+      
+      document.getElementById('tab-' + tabName).classList.add('active');
+      el.classList.add('active');
+    }
+  </script>
 </body>
 </html>
