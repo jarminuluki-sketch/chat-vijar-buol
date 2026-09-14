@@ -24,6 +24,17 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
+// NAVIGASI WELCOME SCREEN & AUTH
+function goToAuth() {
+  document.getElementById('welcomeSection').classList.add('hidden');
+  document.getElementById('authSection').classList.remove('hidden');
+}
+
+function backToWelcome() {
+  document.getElementById('authSection').classList.add('hidden');
+  document.getElementById('welcomeSection').classList.remove('hidden');
+}
+
 // AUTENTIKASI
 async function register() {
   const username = document.getElementById('authUsername').value.trim();
@@ -93,6 +104,7 @@ function logout() {
 }
 
 function checkUserSession() {
+  document.getElementById('welcomeSection').classList.add('hidden');
   document.getElementById('authSection').classList.add('hidden');
   showMainDashboard();
 }
@@ -206,8 +218,9 @@ function updateMyProfileUI() {
   }
 }
 
-// SOCKET & DASHBOARD UTAMA
+// DASHBOARD & SOCKET.IO
 function showMainDashboard() {
+  document.getElementById('welcomeSection').classList.add('hidden');
   document.getElementById('authSection').classList.add('hidden');
   document.getElementById('profileSection').classList.add('hidden');
   document.getElementById('mainSection').classList.remove('hidden');
@@ -242,7 +255,7 @@ function setupSocketListeners() {
       userGrid.innerHTML = `
         <div style="grid-column: 1/-1; text-align:center; color:#666; padding:30px 10px; font-size:13px;">
           Belum ada pengguna lain yang aktif.<br>
-          <small style="color:#888;">Pastikan laptop & HP sudah login dengan <b>username berbeda</b>.</small>
+          <small style="color:#888;">Pastikan perangkat lain sudah login dengan username berbeda.</small>
         </div>`;
       return;
     }
