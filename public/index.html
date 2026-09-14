@@ -11,7 +11,7 @@
   <div class="container">
     <h2>Aplikasi Obrolan & Video Call</h2>
 
-    <!-- AUTENTIKASI -->
+    <!-- SECTION AUTENTIKASI -->
     <div id="authSection">
       <h3>Masuk / Daftar Akun</h3>
       
@@ -31,7 +31,7 @@
       </div>
     </div>
 
-    <!-- PROFIL -->
+    <!-- SECTION PROFIL -->
     <div id="profileSection" class="hidden">
       <h3>Lengkapi Profil Anda</h3>
       <div style="margin-bottom: 15px;">
@@ -58,17 +58,10 @@
       <button type="button" class="btn btn-primary" onclick="saveProfile()">Simpan & Lanjutkan</button>
     </div>
 
-    <!-- DASHBOARD UTAMA -->
+    <!-- DASHBOARD UTAMA BERNAVIGASI -->
     <div id="mainSection" class="hidden">
-      <div style="display: flex; justify-content: space-between; align-items: center; background: #f1f5f9; padding: 12px 18px; border-radius: 10px; margin-bottom: 20px;">
-        <div>Halo, <strong id="displayUsername" style="color: #0072ff;">-</strong></div>
-        <div>
-          <button type="button" class="btn btn-secondary" style="font-size:12px; padding:6px 12px;" onclick="editProfile()">Edit Profil</button>
-          <button type="button" class="btn btn-danger" style="font-size:12px; padding:6px 12px;" onclick="logout()">Log Out</button>
-        </div>
-      </div>
-
-      <!-- VIDEO CALL CONTAINER -->
+      
+      <!-- AREA PANGGILAN VIDEO (WEBRTC OVERLAY) -->
       <div id="callContainer" class="hidden" style="margin-bottom: 25px;">
         <div style="display: flex; gap: 10px; justify-content: center; margin-bottom: 15px; background: #e2e8f0; padding: 10px; border-radius: 8px;">
           <button type="button" class="btn btn-warning" id="btnMuteMic" onclick="toggleMic()">Mute Mic</button>
@@ -84,22 +77,64 @@
         </div>
       </div>
 
-      <!-- USER ONLINE GRID -->
-      <h3>Daftar Pengguna Online</h3>
-      <div class="user-grid" id="userGrid" style="margin-bottom: 25px;"></div>
-
-      <!-- CHAT SECTION -->
-      <div style="display:flex; justify-content:space-between; align-items:center;">
-        <h3 id="chatHeader">Obrolan Teks (Publik)</h3>
-        <button type="button" id="btnResetChatTarget" class="btn btn-secondary hidden" style="font-size:11px;" onclick="resetChatTarget()">Kembali ke Chat Publik</button>
+      <!-- TAB 1: HOME / BERANDA (PENGGUNA AKTIF) -->
+      <div id="tab-home" class="tab-content">
+        <h3 style="margin-bottom: 15px;">Pengguna Aktif</h3>
+        <div class="user-grid" id="userGrid">
+          <!-- Kartu Pengguna Aktif dimasukkan secara dinamis via JS -->
+        </div>
       </div>
 
-      <div id="chat-box"></div>
+      <!-- TAB 2: OBROLAN (CHAT PUBLIK & DM) -->
+      <div id="tab-chat" class="tab-content hidden">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 15px;">
+          <h3 id="chatHeader">Obrolan Teks (Publik)</h3>
+          <button type="button" id="btnResetChatTarget" class="btn btn-secondary hidden" style="font-size:11px;" onclick="resetChatTarget()">Kembali ke Chat Publik</button>
+        </div>
 
-      <div style="display: flex; gap: 10px;">
-        <input type="text" id="msgInput" placeholder="Ketik pesan..." style="margin-bottom: 0;" onkeypress="if(event.key==='Enter') sendChatMessage()">
-        <button type="button" class="btn btn-primary" onclick="sendChatMessage()">Kirim</button>
+        <div id="chat-box"></div>
+
+        <div style="display: flex; gap: 10px;">
+          <input type="text" id="msgInput" placeholder="Ketik pesan..." style="margin-bottom: 0;" onkeypress="if(event.key==='Enter') sendChatMessage()">
+          <button type="button" class="btn btn-primary" onclick="sendChatMessage()">Kirim</button>
+        </div>
       </div>
+
+      <!-- TAB 3: PROFIL SAYA -->
+      <div id="tab-profile" class="tab-content hidden">
+        <h3>Profil Saya</h3>
+        <div style="background: #f1f5f9; padding: 20px; border-radius: 12px; margin-top: 15px;">
+          <div style="display:flex; align-items:center; gap:15px; margin-bottom:20px;">
+            <img id="myProfilePhoto" src="https://via.placeholder.com/80" style="width:80px; height:80px; border-radius:50%; object-fit:cover;">
+            <div>
+              <h4 id="displayFullName" style="margin-bottom:4px;">-</h4>
+              <p style="font-size:13px; color:#666;">Username: <strong id="displayUsername" style="color:#0072ff;">-</strong></p>
+            </div>
+          </div>
+
+          <div style="display:flex; gap:10px;">
+            <button type="button" class="btn btn-secondary" onclick="editProfile()">Edit Profil</button>
+            <button type="button" class="btn btn-danger" onclick="logout()">Log Out</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- BOTTOM NAVIGATION BAR -->
+      <nav class="bottom-nav">
+        <button type="button" class="nav-item active" id="nav-home" onclick="switchTab('home')">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+          <span>Home</span>
+        </button>
+        <button type="button" class="nav-item" id="nav-chat" onclick="switchTab('chat')">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
+          <span>Obrolan</span>
+        </button>
+        <button type="button" class="nav-item" id="nav-profile" onclick="switchTab('profile')">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+          <span>Saya</span>
+        </button>
+      </nav>
+
     </div>
   </div>
 
