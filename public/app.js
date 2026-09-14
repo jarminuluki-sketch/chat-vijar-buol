@@ -558,3 +558,23 @@ function endCall() {
   document.getElementById('callContainer').classList.add('hidden');
   socket.emit('get_user_list');
 }
+function switchTab(tabName) {
+  // Sembunyikan semua tab section
+  document.querySelectorAll('.tab-content').forEach(section => {
+    section.classList.add('hidden');
+  });
+
+  // Hapus status aktif di tombol navigasi
+  document.querySelectorAll('.nav-item').forEach(btn => {
+    btn.classList.remove('active');
+  });
+
+  // Tampilkan tab yang dipilih
+  const targetSection = document.getElementById(`tab-${tabName}`);
+  if (targetSection) {
+    targetSection.classList.remove('hidden');
+  }
+
+  // Aktifkan ikon navigasi yang diklik
+  event.currentTarget.classList.add('active');
+}
