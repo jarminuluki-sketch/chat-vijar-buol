@@ -168,3 +168,148 @@ textarea:focus {
 .hidden {
   display: none !important;
 }
+/* Tampilan Grid Pengguna (Sesuai Gambar 3) */
+.explore-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  padding-bottom: 70px; /* Jarak agar tidak tertutup Bottom Nav */
+}
+
+.user-card-explore {
+  position: relative;
+  height: 220px;
+  border-radius: 16px;
+  overflow: hidden;
+  background-size: cover;
+  background-position: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.user-card-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 50%, rgba(0, 0, 0, 0.75) 100%);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 10px;
+}
+
+.badge-status {
+  align-self: flex-start;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: bold;
+  color: white;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.badge-status.online::before {
+  content: '• ';
+  color: #2ecc71;
+}
+
+.user-info-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  color: white;
+}
+
+.user-info-bottom .name {
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.btn-call-mini {
+  background: rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(5px);
+  border: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+/* Bottom Navigation Bar (Fixed di Bawah Layar) */
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background: #ffffff;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  border-top: 1px solid #e0e0e0;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+  z-index: 1000;
+}
+
+.nav-item {
+  background: none;
+  border: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: #888888;
+  font-size: 11px;
+  cursor: pointer;
+  flex: 1;
+}
+
+.nav-item.active {
+  color: #ff416c; /* Warna aksen merah/pink cerah */
+  font-weight: bold;
+}
+
+.nav-icon {
+  width: 22px;
+  height: 22px;
+  margin-bottom: 2px;
+}
+
+/* Card Menu Profil & Saldo (Sesuai Gambar 1) */
+.coin-card {
+  background: linear-gradient(135deg, #ff416c, #ff4b2b);
+  border-radius: 20px;
+  padding: 20px;
+  color: white;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.coin-btn {
+  background: white;
+  color: #333;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 20px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.menu-grid-profile {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.menu-box {
+  background: #f8f9fa;
+  border-radius: 12px;
+  padding: 15px 10px;
+  text-align: center;
+  font-size: 12px;
+  color: #555;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+}
