@@ -1,164 +1,443 @@
-<!DOCTYPE html>
-<html lang="id">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Aplikasi Obrolan & Panggilan Video</title>
-  
-  <!-- CSS Utama -->
-  <link rel="stylesheet" href="style.css">
+// Inisialisasi Socket.IO Client
+const socket = io();
 
-  <!-- Google Sign-In SDK -->
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
-</head>
-<body>
+// Global State
+let currentUser = null;
+let currentProfile = null;
+let localStream = null;
+let peerConnections = {}; // { socketId: RTCPeerConnection }
+let activeCallTargetSocket = null;
+let currentChatTarget = null; // null = Public Chat, String = Target Username
 
-  <div class="container">
-    <!-- HEADER APLIKASI -->
-    <h2>Aplikasi Obrolan & Panggilan Video</h2>
+// WebRTC Configuration (Menggunakan Google STUN Server Free)
+const rtcConfig = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' }
+  ]
+};
 
-    <!-- =================================================================== -->
-    <!-- SECTION 1: AUTENTIKASI (LOGIN / REGISTER)                          -->
-    <!-- =================================================================== -->
-    <div id="authSection">
-      <h3>Masuk / Daftar Akun</h3>
-      
-      <div style="margin-bottom: 15px;">
-        <label for="authUsername" style="display:block; font-weight:600; margin-bottom:5px;">Username</label>
-        <input type="text" id="authUsername" placeholder="Masukkan username">
-      </div>
+// Auto Check Login Session saat Halaman Dimuat
+document.addEventListener('DOMContentLoaded', () => {
+  const savedUser = localStorage.getItem('currentUser');
+  if (savedUser) {
+    currentUser = savedUser;
+    // Buka section main jika sudah login
+    showSection('mainSection');
+    socket.emit('register-user', currentUser);
+    document.getElementById('displayUsername').innerText = currentUser;
+  } else {
+    showSection('authSection');
+  }
+});
 
-      <div style="margin-bottom: 15px;">
-        <label for="authPassword" style="display:block; font-weight:600; margin-bottom:5px;">Password</label>
-        <input type="password" id="authPassword" placeholder="Masukkan password">
-      </div>
+// Helper Pengganti Tab / Section
+function showSection(sectionId) {
+  document.getElementById('authSection').classList.add('hidden');
+  document.getElementById('profileSection').classList.add('hidden');
+  document.getElementById('mainSection').classList.add('hidden');
 
-      <div style="display: flex; gap: 10px; margin-bottom: 20px;">
-        <button class="btn btn-primary" onclick="login()">Masuk (Login)</button>
-        <button class="btn btn-secondary" onclick="register()">Daftar Baru</button>
-      </div>
+  const target = document.getElementById(sectionId);
+  if (target) target.classList.remove('hidden');
+}
 
-      <hr style="border:0; border-top: 1px solid #e2e8f0; margin: 20px 0;">
+// ==========================================
+// AUTHENTICATION LOGIC (REGISTER & LOGIN)
+// ==========================================
 
-      <!-- Google Sign-In Button -->
-      <div style="display: flex; justify-content: center;">
-        <div id="g_id_onload"
-             data-client_id="YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com"
-             data-callback="handleCredentialResponse">
-        </div>
-        <div class="g_id_signin" data-type="standard" data-theme="outline" data-text="sign_in_with"></div>
-      </div>
-    </div>
+async function register() {
+  const usernameInput = document.getElementById('authUsername');
+  const passwordInput = document.getElementById('authPassword');
 
-    <!-- =================================================================== -->
-    <!-- SECTION 2: PENGISIAN PROFIL PENGGUNA                                -->
-    <!-- =================================================================== -->
-    <div id="profileSection" class="hidden">
-      <h3>Lengkapi Profil Anda</h3>
-      <p style="font-size: 13px; color: #666; margin-bottom: 15px;">Silakan lengkapi informasi diri Anda untuk melanjutkan.</p>
+  const username = usernameInput ? usernameInput.value.trim() : '';
+  const password = passwordInput ? passwordInput.value.trim() : '';
 
-      <div style="margin-bottom: 15px;">
-        <label for="profFullName" style="display:block; font-weight:600; margin-bottom:5px;">Nama Lengkap</label>
-        <input type="text" id="profFullName" placeholder="Masukkan nama lengkap">
-      </div>
+  if (!username || !password) {
+    alert('Harap masukkan Username dan Password!');
+    return;
+  }
 
-      <div style="margin-bottom: 15px;">
-        <label for="profAge" style="display:block; font-weight:600; margin-bottom:5px;">Umur</label>
-        <input type="number" id="profAge" placeholder="Contoh: 25">
-      </div>
+  try {
+    const res = await fetch('/api/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    const data = await res.json();
 
-      <div style="margin-bottom: 15px;">
-        <label for="profBirthYear" style="display:block; font-weight:600; margin-bottom:5px;">Tahun Lahir</label>
-        <input type="number" id="profBirthYear" placeholder="Contoh: 1999">
-      </div>
+    if (res.ok && data.success) {
+      alert(data.message);
+    } else {
+      alert(data.message || 'Pendaftaran gagal!');
+    }
+  } catch (err) {
+    console.error('Error Register:', err);
+    alert('Terjadi kesalahan koneksi ke server!');
+  }
+}
 
-      <div style="margin-bottom: 20px;">
-        <label for="profPhotoInput" style="display:block; font-weight:600; margin-bottom:5px;">Foto Profil</label>
-        <input type="file" id="profPhotoInput" accept="image/*">
-        <div id="uploadStatus" style="font-size:12px; color:#0072ff; margin-top:5px;"></div>
-      </div>
+async function login() {
+  const usernameInput = document.getElementById('authUsername');
+  const passwordInput = document.getElementById('authPassword');
 
-      <button class="btn btn-primary" id="btnSaveProfile" onclick="saveProfile()">Simpan & Lanjutkan</button>
-    </div>
+  const username = usernameInput ? usernameInput.value.trim() : '';
+  const password = passwordInput ? passwordInput.value.trim() : '';
 
-    <!-- =================================================================== -->
-    <!-- SECTION 3: DASHBOARD UTAMA (VIDEO CALL & CHAT)                      -->
-    <!-- =================================================================== -->
-    <div id="mainSection" class="hidden">
-      <!-- Status User Logged In -->
-      <div style="display: flex; justify-content: space-between; align-items: center; background: #f1f5f9; padding: 12px 18px; border-radius: 10px; margin-bottom: 20px;">
+  if (!username || !password) {
+    alert('Harap masukkan Username dan Password!');
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    const data = await res.json();
+
+    if (res.ok && data.success) {
+      currentUser = username;
+      localStorage.setItem('currentUser', currentUser);
+      socket.emit('register-user', currentUser);
+      document.getElementById('displayUsername').innerText = currentUser;
+
+      if (data.user && data.user.profile) {
+        currentProfile = data.user.profile;
+        showSection('mainSection');
+      } else {
+        showSection('profileSection');
+      }
+    } else {
+      alert(data.message || 'Login gagal!');
+    }
+  } catch (err) {
+    console.error('Error Login:', err);
+    alert('Terjadi kesalahan koneksi!');
+  }
+}
+
+function logout() {
+  localStorage.removeItem('currentUser');
+  currentUser = null;
+  currentProfile = null;
+  if (localStream) {
+    localStream.getTracks().forEach(track => track.stop());
+  }
+  location.reload();
+}
+
+// ==========================================
+// PROFILE MANAGEMENT LOGIC
+// ==========================================
+
+function editProfile() {
+  showSection('profileSection');
+}
+
+async function saveProfile() {
+  const fullName = document.getElementById('profFullName').value.trim();
+  const age = document.getElementById('profAge').value.trim();
+  const birthYear = document.getElementById('profBirthYear').value.trim();
+  const photoInput = document.getElementById('profPhotoInput');
+
+  let photoBase64 = currentProfile ? currentProfile.photo : null;
+
+  if (photoInput && photoInput.files && photoInput.files[0]) {
+    document.getElementById('uploadStatus').innerText = 'Memproses foto...';
+    photoBase64 = await convertFileToBase64(photoInput.files[0]);
+  }
+
+  try {
+    const res = await fetch('/api/profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: currentUser,
+        fullName,
+        age,
+        birthYear,
+        photo: photoBase64
+      })
+    });
+
+    const data = await res.json();
+    if (res.ok && data.success) {
+      alert('Profil berhasil disimpan!');
+      currentProfile = data.profile;
+      showSection('mainSection');
+    } else {
+      alert(data.message || 'Gagal menyimpan profil.');
+    }
+  } catch (err) {
+    console.error('Error Save Profile:', err);
+    alert('Terjadi kesalahan saat menyimpan profil.');
+  }
+}
+
+function convertFileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = error => reject(error);
+    reader.readAsDataURL(file);
+  });
+}
+
+// Google Sign-In Callback Dummy Handler
+function handleCredentialResponse(response) {
+  alert('Google Login berhasil dipicu! Menggunakan token ID.');
+}
+
+// ==========================================
+// REAL-TIME USER LIST & CHAT LOGIC
+// ==========================================
+
+socket.on('update-user-list', (users) => {
+  const userGrid = document.getElementById('userGrid');
+  if (!userGrid) return;
+
+  userGrid.innerHTML = '';
+
+  users.forEach(user => {
+    if (user.username === currentUser) return; // Jangan tampilkan diri sendiri
+
+    const card = document.createElement('div');
+    card.className = 'user-card';
+    card.style.padding = '12px';
+
+    const photoSrc = (user.profile && user.profile.photo) 
+      ? user.profile.photo 
+      : 'https://via.placeholder.com/80?text=User';
+
+    const displayName = (user.profile && user.profile.fullName) 
+      ? user.profile.fullName 
+      : user.username;
+
+    card.innerHTML = `
+      <div style="display:flex; align-items:center; gap:12px;">
+        <img src="${photoSrc}" style="width:50px; height:50px; border-radius:50%; object-fit:cover;">
         <div>
-          <span>Halo, <strong id="displayUsername" style="color: #0072ff;">-</strong></span>
-        </div>
-        <div>
-          <button class="btn btn-secondary" style="font-size:12px; padding:6px 12px;" onclick="editProfile()">Edit Profil</button>
-          <button class="btn btn-danger" style="font-size:12px; padding:6px 12px;" onclick="logout()">Log Out</button>
+          <strong style="display:block; font-size:14px;">${displayName}</strong>
+          <span style="font-size:12px; color:#2ecc71;">● Online</span>
         </div>
       </div>
-
-      <!-- AREA PANGGILAN VIDEO -->
-      <div id="callContainer" class="hidden" style="margin-bottom: 25px;">
-        <div style="display: flex; gap: 10px; justify-content: center; margin-bottom: 15px; background: #e2e8f0; padding: 10px; border-radius: 8px;">
-          <button class="btn btn-warning" id="btnMuteMic" onclick="toggleMic()">Mute Mic</button>
-          <button class="btn btn-warning" id="btnMuteCam" onclick="toggleCam()">Matikan Kamera</button>
-          <button class="btn btn-danger" onclick="endCall()">Akhiri Panggilan</button>
-        </div>
-
-        <div class="video-grid" id="videoGrid">
-          <!-- Video Kamera Lokal Saya -->
-          <div class="video-card" id="card-local">
-            <video id="localVideo" autoplay playsinline muted></video>
-            <div class="video-label">Saya (Lokal)</div>
-          </div>
-          <!-- Video Lawan Bicara Akan Muncul Secara Dinamis Di Sini -->
-        </div>
+      <div style="display:flex; gap:8px; margin-top:10px;">
+        <button class="btn btn-primary" style="font-size:11px; flex:1;" onclick="startVideoCall('${user.socketId}')">Panggil Video</button>
+        <button class="btn btn-secondary" style="font-size:11px; flex:1;" onclick="setPrivateChat('${user.username}')">DM Chat</button>
       </div>
+    `;
 
-      <!-- DAFTAR PENGGUNA ONLINE -->
-      <h3 style="margin-top: 20px;">Daftar Pengguna Online</h3>
-      <div class="user-grid" id="userGrid" style="margin-bottom: 25px;">
-        <!-- Pengguna lain akan dimasukkan secara otomatis oleh Socket.IO -->
-      </div>
+    userGrid.appendChild(card);
+  });
+});
 
-      <!-- OBROLAN TEKS & DM PRIVAT -->
-      <div style="display:flex; justify-content:space-between; align-items:center;">
-        <h3 id="chatHeader">Obrolan Teks (Publik)</h3>
-        <button id="btnResetChatTarget" class="btn btn-secondary hidden" style="font-size:11px;" onclick="resetChatTarget()">Kembali ke Chat Publik</button>
-      </div>
+function setPrivateChat(targetUsername) {
+  currentChatTarget = targetUsername;
+  document.getElementById('chatHeader').innerText = `Obrolan Privat (DM dengan ${targetUsername})`;
+  document.getElementById('btnResetChatTarget').classList.remove('hidden');
+}
 
-      <div id="chat-box"></div>
+function resetChatTarget() {
+  currentChatTarget = null;
+  document.getElementById('chatHeader').innerText = 'Obrolan Teks (Publik)';
+  document.getElementById('btnResetChatTarget').classList.add('hidden');
+}
 
-      <div style="display: flex; gap: 10px;">
-        <input type="text" id="msgInput" placeholder="Ketik pesan..." style="margin-bottom: 0;" onkeypress="if(event.key==='Enter') sendChatMessage()">
-        <button class="btn btn-primary" onclick="sendChatMessage()">Kirim</button>
-      </div>
-    </div>
-  </div>
+function sendChatMessage() {
+  const msgInput = document.getElementById('msgInput');
+  const message = msgInput.value.trim();
+  if (!message) return;
 
-  <!-- Socket.IO Client Library -->
-  <script src="/socket.io/socket.io.js"></script>
-  
-  <!-- App Logic JavaScript -->
-  <script src="app.js"></script>
+  socket.emit('send-chat', {
+    targetUser: currentChatTarget,
+    message: message
+  });
 
-</body>
-</html>
-<!-- NAVIGASI BAWAH (BOTTOM NAVBAR) -->
-<nav class="bottom-nav">
-  <button class="nav-item active" onclick="switchTab('explore')">
-    <svg class="nav-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
-    <span>Jelajahi</span>
-  </button>
-  <button class="nav-item" onclick="switchTab('video-match')">
-    <svg class="nav-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>
-    <span>Video</span>
-  </button>
-  <button class="nav-item" onclick="switchTab('chat')">
-    <svg class="nav-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 9h12v2H6V9zm8 5H6v-2h8v2zm4-6H6V6h12v2z"/></svg>
-    <span>Obrolan</span>
-  </button>
-  <button class="nav-item" onclick="switchTab('profile')">
-    <svg class="nav-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
-    <span>Saya</span>
-  </button>
-</nav>
+  msgInput.value = '';
+}
+
+socket.on('receive-chat', (data) => {
+  const chatBox = document.getElementById('chat-box');
+  if (!chatBox) return;
+
+  const msgDiv = document.createElement('div');
+  msgDiv.className = data.isPrivate ? 'msg msg-private' : 'msg';
+  msgDiv.innerHTML = `<strong>${data.sender}:</strong> ${escapeHTML(data.message)}`;
+
+  chatBox.appendChild(msgDiv);
+  chatBox.scrollTop = chatBox.scrollHeight;
+});
+
+function escapeHTML(str) {
+  return str.replace(/[&<>'"]/g, 
+    tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
+  );
+}
+
+// ==========================================
+// WEBRTC VIDEO CALL LOGIC
+// ==========================================
+
+async function initLocalStream() {
+  if (!localStream) {
+    try {
+      localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      const localVideo = document.getElementById('localVideo');
+      if (localVideo) localVideo.srcObject = localStream;
+    } catch (err) {
+      console.error('Gagal mengakses kamera/mikrofon:', err);
+      alert('Izinkan akses kamera dan mikrofon pada browser Anda!');
+      throw err;
+    }
+  }
+}
+
+async function startVideoCall(targetSocketId) {
+  try {
+    await initLocalStream();
+    document.getElementById('callContainer').classList.remove('hidden');
+    activeCallTargetSocket = targetSocketId;
+
+    const pc = createPeerConnection(targetSocketId);
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+
+    socket.emit('call-user', {
+      offer: offer,
+      userToCall: targetSocketId
+    });
+  } catch (err) {
+    console.error('Gagal membuat panggilan:', err);
+  }
+}
+
+socket.on('call-made', async (data) => {
+  const confirmCall = confirm(`Panggilan video masuk dari ${data.fromUser}. Terima?`);
+  if (!confirmCall) return;
+
+  try {
+    await initLocalStream();
+    document.getElementById('callContainer').classList.remove('hidden');
+    activeCallTargetSocket = data.socket;
+
+    const pc = createPeerConnection(data.socket);
+    await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+
+    socket.emit('make-answer', {
+      answer: answer,
+      to: data.socket
+    });
+  } catch (err) {
+    console.error('Gagal menerima panggilan:', err);
+  }
+});
+
+socket.on('answer-made', async (data) => {
+  const pc = peerConnections[data.socket];
+  if (pc) {
+    await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+  }
+});
+
+socket.on('ice-candidate', async (data) => {
+  const pc = peerConnections[data.from];
+  if (pc && data.candidate) {
+    try {
+      await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+    } catch (e) {
+      console.error('Error ICE Candidate:', e);
+    }
+  }
+});
+
+socket.on('call-ended', () => {
+  alert('Panggilan video telah diakhiri.');
+  endCallUI();
+});
+
+function createPeerConnection(socketId) {
+  if (peerConnections[socketId]) return peerConnections[socketId];
+
+  const pc = new RTCPeerConnection(rtcConfig);
+  peerConnections[socketId] = pc;
+
+  // Add Local Tracks to PC
+  localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
+  // Handle Remote Stream
+  pc.ontrack = (event) => {
+    let remoteCard = document.getElementById(`card-${socketId}`);
+    if (!remoteCard) {
+      const videoGrid = document.getElementById('videoGrid');
+      remoteCard = document.createElement('div');
+      remoteCard.className = 'video-card';
+      remoteCard.id = `card-${socketId}`;
+      remoteCard.innerHTML = `
+        <video id="video-${socketId}" autoplay playsinline></video>
+        <div class="video-label">Lawan Bicara</div>
+      `;
+      videoGrid.appendChild(remoteCard);
+    }
+    const remoteVideo = document.getElementById(`video-${socketId}`);
+    if (remoteVideo) remoteVideo.srcObject = event.streams[0];
+  };
+
+  // ICE Candidate Transmission
+  pc.onicecandidate = (event) => {
+    if (event.candidate) {
+      socket.emit('ice-candidate', {
+        to: socketId,
+        candidate: event.candidate
+      });
+    }
+  };
+
+  return pc;
+}
+
+function toggleMic() {
+  if (localStream) {
+    const audioTrack = localStream.getAudioTracks()[0];
+    if (audioTrack) {
+      audioTrack.enabled = !audioTrack.enabled;
+      document.getElementById('btnMuteMic').innerText = audioTrack.enabled ? 'Mute Mic' : 'Unmute Mic';
+    }
+  }
+}
+
+function toggleCam() {
+  if (localStream) {
+    const videoTrack = localStream.getVideoTracks()[0];
+    if (videoTrack) {
+      videoTrack.enabled = !videoTrack.enabled;
+      document.getElementById('btnMuteCam').innerText = videoTrack.enabled ? 'Matikan Kamera' : 'Nyalakan Kamera';
+    }
+  }
+}
+
+function endCall() {
+  if (activeCallTargetSocket) {
+    socket.emit('end-call', { to: activeCallTargetSocket });
+  }
+  endCallUI();
+}
+
+function endCallUI() {
+  for (const sId in peerConnections) {
+    peerConnections[sId].close();
+  }
+  peerConnections = {};
+
+  const videoGrid = document.getElementById('videoGrid');
+  const cards = videoGrid.querySelectorAll('.video-card');
+  cards.forEach(card => {
+    if (card.id !== 'card-local') card.remove();
+  });
+
+  document.getElementById('callContainer').classList.add('hidden');
+  activeCallTargetSocket = null;
+}
