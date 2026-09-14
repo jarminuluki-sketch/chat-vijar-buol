@@ -1,6 +1,6 @@
 let socket;
-let currentUser = localStorage.getItem('currentUser') || null;
-let userProfile = JSON.parse(localStorage.getItem('userProfile')) || null;
+let currentUser = null;
+let userProfile = null;
 let currentTargetSocketId = null;
 let localStream = null;
 let peerConnection = null;
@@ -21,21 +21,22 @@ document.addEventListener('DOMContentLoaded', () => {
   const authSection = document.getElementById('authSection');
   const appSection = document.getElementById('appSection');
 
-  // Event Listener Tombol Mulai (Welcome -> Auth)
+  // Hapus data login lama dari browser agar selalu tampil Welcome Screen di awal
+  localStorage.removeItem('currentUser');
+  localStorage.removeItem('userProfile');
+
+  // Pastikan tampilan awal selalu Welcome Screen
+  if (welcomeSection) welcomeSection.classList.remove('hidden');
+  if (authSection) authSection.classList.add('hidden');
+  if (appSection) appSection.classList.add('hidden');
+
+  // Event Listener Tombol Mulai (Welcome Screen -> Auth Screen)
   if (startBtn) {
     startBtn.addEventListener('click', (e) => {
       e.preventDefault();
       if (welcomeSection) welcomeSection.classList.add('hidden');
       if (authSection) authSection.classList.remove('hidden');
     });
-  }
-
-  // Cek Status Login
-  if (currentUser && appSection) {
-    if (welcomeSection) welcomeSection.classList.add('hidden');
-    if (authSection) authSection.classList.add('hidden');
-    appSection.classList.remove('hidden');
-    initSocketConnection();
   }
 
   // --- 2. LOGIKA AUTENTIKASI (LOGIN / REGISTER) ---
@@ -51,14 +52,14 @@ document.addEventListener('DOMContentLoaded', () => {
       e.preventDefault();
       isRegisterMode = !isRegisterMode;
       if (isRegisterMode) {
-        authTitle.innerText = 'Daftar Akun Baru';
-        authSubmitBtn.innerText = 'Daftar';
-        toggleAuthText.innerText = 'Sudah punya akun?';
+        if (authTitle) authTitle.innerText = 'Daftar Akun Baru';
+        if (authSubmitBtn) authSubmitBtn.innerText = 'Daftar';
+        if (toggleAuthText) toggleAuthText.innerText = 'Sudah punya akun?';
         toggleAuthLink.innerText = 'Masuk di sini';
       } else {
-        authTitle.innerText = 'Masuk Aplikasi';
-        authSubmitBtn.innerText = 'Masuk';
-        toggleAuthText.innerText = 'Belum punya akun?';
+        if (authTitle) authTitle.innerText = 'Masuk Aplikasi';
+        if (authSubmitBtn) authSubmitBtn.innerText = 'Masuk';
+        if (toggleAuthText) toggleAuthText.innerText = 'Belum punya akun?';
         toggleAuthLink.innerText = 'Daftar di sini';
       }
     });
@@ -104,7 +105,7 @@ function setupSocketListeners() {
   });
 
   socket.on('private-message', (data) => {
-    appendMessage(data.sender, data.message, 'incoming');
+    appendMessage(data.sender, data.message, 'incoming', data.image);
   });
 
   // Listener Signaling WebRTC
@@ -177,67 +178,76 @@ function selectUserToChat(socketId, username) {
 async function startVideoCall() {
   if (!currentTargetSocketId) return alert('Pilih pengguna untuk dipanggil');
 
-  localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-  const localVideo = document.getElementById('localVideo');
-  if (localVideo) localVideo.srcObject = localStream;
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    const localVideo = document.getElementById('localVideo');
+    if (localVideo) localVideo.srcObject = localStream;
 
-  peerConnection = new RTCPeerConnection(rtcConfiguration);
-  localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+    peerConnection = new RTCPeerConnection(rtcConfiguration);
+    localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
 
-  peerConnection.ontrack = (event) => {
-    const remoteVideo = document.getElementById('remoteVideo');
-    if (remoteVideo) remoteVideo.srcObject = event.streams[0];
-  };
+    peerConnection.ontrack = (event) => {
+      const remoteVideo = document.getElementById('remoteVideo');
+      if (remoteVideo) remoteVideo.srcObject = event.streams[0];
+    };
 
-  peerConnection.onicecandidate = (event) => {
-    if (event.candidate) {
-      socket.emit('ice-candidate', {
-        to: currentTargetSocketId,
-        candidate: event.candidate
-      });
-    }
-  };
+    peerConnection.onicecandidate = (event) => {
+      if (event.candidate) {
+        socket.emit('ice-candidate', {
+          to: currentTargetSocketId,
+          candidate: event.candidate
+        });
+      }
+    };
 
-  const offer = await peerConnection.createOffer();
-  await peerConnection.setLocalDescription(offer);
+    const offer = await peerConnection.createOffer();
+    await peerConnection.setLocalDescription(offer);
 
-  socket.emit('call-offer', {
-    to: currentTargetSocketId,
-    offer: offer,
-    from: socket.id
-  });
+    socket.emit('call-offer', {
+      to: currentTargetSocketId,
+      offer: offer,
+      from: socket.id
+    });
+  } catch (err) {
+    console.error("Gagal mengakses kamera/mikrofon:", err);
+    alert("Kamera atau Mikrofon tidak dapat diakses.");
+  }
 }
 
 async function handleReceiveOffer(offer) {
-  localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-  const localVideo = document.getElementById('localVideo');
-  if (localVideo) localVideo.srcObject = localStream;
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    const localVideo = document.getElementById('localVideo');
+    if (localVideo) localVideo.srcObject = localStream;
 
-  peerConnection = new RTCPeerConnection(rtcConfiguration);
-  localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+    peerConnection = new RTCPeerConnection(rtcConfiguration);
+    localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
 
-  peerConnection.ontrack = (event) => {
-    const remoteVideo = document.getElementById('remoteVideo');
-    if (remoteVideo) remoteVideo.srcObject = event.streams[0];
-  };
+    peerConnection.ontrack = (event) => {
+      const remoteVideo = document.getElementById('remoteVideo');
+      if (remoteVideo) remoteVideo.srcObject = event.streams[0];
+    };
 
-  peerConnection.onicecandidate = (event) => {
-    if (event.candidate && activeCallTargetSocketId) {
-      socket.emit('ice-candidate', {
-        to: activeCallTargetSocketId,
-        candidate: event.candidate
-      });
-    }
-  };
+    peerConnection.onicecandidate = (event) => {
+      if (event.candidate && activeCallTargetSocketId) {
+        socket.emit('ice-candidate', {
+          to: activeCallTargetSocketId,
+          candidate: event.candidate
+        });
+      }
+    };
 
-  await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
-  const answer = await peerConnection.createAnswer();
-  await peerConnection.setLocalDescription(answer);
+    await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+    const answer = await peerConnection.createAnswer();
+    await peerConnection.setLocalDescription(answer);
 
-  socket.emit('call-answer', {
-    to: activeCallTargetSocketId,
-    answer: answer
-  });
+    socket.emit('call-answer', {
+      to: activeCallTargetSocketId,
+      answer: answer
+    });
+  } catch (err) {
+    console.error("Gagal mengakses kamera/mikrofon:", err);
+  }
 }
 
 function closeVideoCall() {
