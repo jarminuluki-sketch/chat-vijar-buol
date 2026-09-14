@@ -6,128 +6,150 @@ const path = require('path');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-  maxHttpBufferSize: 1e7 // Limit 10MB untuk pengiriman data foto/file via socket
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
 });
 
-// Middleware
+// Middleware untuk memproses data JSON dan Form
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Melayani file statis dari folder public
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Database In-Memory (Simpan sementara di memori server)
-const usersDB = {}; // { username: { username, password, profile: { fullName, age, birthYear, photo } } }
-const activeSockets = {}; // { socketId: username }
-const userSockets = {}; // { username: socketId }
+// Database Sementara di Memori Server
+const usersDB = {};       // Data pengguna: { username: { username, password, profile } }
+const onlineSockets = {}; // Mapping Socket: { socketId: username }
 
 // ==========================================
-// REST API ENDPOINTS (AUTH & PROFILE)
+// REST API ENDPOINTS
 // ==========================================
 
-// 1. Register API
+// Endpoint Register
 app.post('/api/register', (req, res) => {
   const { username, password } = req.body;
+
   if (!username || !password) {
     return res.status(400).json({ success: false, message: 'Username dan password wajib diisi!' });
   }
 
-  if (usersDB[username]) {
-    return res.status(400).json({ success: false, message: 'Username sudah terdaftar! Gunakan username lain atau langsung Login.' });
+  const cleanUser = username.trim().toLowerCase();
+
+  if (usersDB[cleanUser]) {
+    return res.status(400).json({ success: false, message: 'Username sudah terdaftar! Silakan login.' });
   }
 
-  usersDB[username] = {
-    username,
-    password,
+  usersDB[cleanUser] = {
+    username: cleanUser,
+    password: password.trim(),
     profile: null
   };
 
-  return res.json({ success: true, message: 'Registrasi berhasil! Silakan klik tombol Masuk (Login).' });
+  console.log(`[REGISTER SUCCESS] User terdaftar: ${cleanUser}`);
+  return res.json({ success: true, message: 'Pendaftaran berhasil! Silakan klik Masuk (Login).' });
 });
 
-// 2. Login API
+// Endpoint Login
 app.post('/api/login', (req, res) => {
   const { username, password } = req.body;
-  const user = usersDB[username];
 
-  if (!user || user.password !== password) {
+  if (!username || !password) {
+    return res.status(400).json({ success: false, message: 'Username dan password wajib diisi!' });
+  }
+
+  const cleanUser = username.trim().toLowerCase();
+  const user = usersDB[cleanUser];
+
+  if (!user || user.password !== password.trim()) {
     return res.status(401).json({ success: false, message: 'Username atau password salah!' });
   }
 
-  return res.json({
-    success: true,
-    message: 'Login berhasil!',
-    user: {
-      username: user.username,
-      profile: user.profile
-    }
+  console.log(`[LOGIN SUCCESS] User masuk: ${cleanUser}`);
+  return res.json({ 
+    success: true, 
+    message: 'Login berhasil!', 
+    username: cleanUser,
+    profile: user.profile 
   });
 });
 
-// 3. Save Profile API
+// Endpoint Profil
 app.post('/api/profile', (req, res) => {
   const { username, fullName, age, birthYear, photo } = req.body;
 
-  if (!usersDB[username]) {
+  if (!username) {
+    return res.status(400).json({ success: false, message: 'Sesi username tidak valid!' });
+  }
+
+  const cleanUser = username.trim().toLowerCase();
+
+  if (!usersDB[cleanUser]) {
     return res.status(404).json({ success: false, message: 'Pengguna tidak ditemukan!' });
   }
 
-  usersDB[username].profile = {
-    fullName: fullName || username,
-    age: age || '-',
-    birthYear: birthYear || '-',
+  usersDB[cleanUser].profile = {
+    fullName: fullName || cleanUser,
+    age: age || '',
+    birthYear: birthYear || '',
     photo: photo || null
   };
 
-  return res.json({
-    success: true,
-    message: 'Profil berhasil diperbarui!',
-    profile: usersDB[username].profile
-  });
+  console.log(`[PROFILE UPDATED] User: ${cleanUser}`);
+  return res.json({ success: true, message: 'Profil berhasil disimpan!', profile: usersDB[cleanUser].profile });
 });
 
 // ==========================================
-// SOCKET.IO (REAL-TIME CHAT & WEBRTC SIGNALING)
+// SOCKET.IO SIGNALING
 // ==========================================
 io.on('connection', (socket) => {
-  console.log(`Socket terhubung: ${socket.id}`);
+  console.log(`[SOCKET CONNECT] ID: ${socket.id}`);
 
-  // Pendaftaran User Online di Socket
-  socket.on('register-user', (username) => {
-    if (!username) return;
-    
-    // Hapus sesi lama jika ada
-    if (userSockets[username]) {
-      const oldSocketId = userSockets[username];
-      delete activeSockets[oldSocketId];
+  socket.on('user-online', (username) => {
+    if (username) {
+      const cleanUser = username.trim().toLowerCase();
+      onlineSockets[socket.id] = cleanUser;
+      socket.username = cleanUser;
+      broadcastOnlineUsers();
     }
-
-    activeSockets[socket.id] = username;
-    userSockets[username] = socket.id;
-
-    // Kirim daftar pengguna online ke semua client
-    broadcastOnlineUsers();
   });
 
-  // Signal WebRTC: Call User
-  socket.on('call-user', (data) => {
-    const targetSocketId = userSockets[data.userToCall];
-    if (targetSocketId) {
-      io.to(targetSocketId).emit('call-made', {
-        offer: data.offer,
-        socket: socket.id,
-        fromUser: activeSockets[socket.id]
+  socket.on('send-message', (data) => {
+    if (data.targetSocketId) {
+      io.to(data.targetSocketId).emit('receive-message', {
+        sender: data.sender,
+        text: data.text,
+        isPrivate: true,
+        fromSocketId: socket.id
+      });
+      socket.emit('receive-message', {
+        sender: data.sender,
+        text: data.text,
+        isPrivate: true,
+        toSocketId: data.targetSocketId
+      });
+    } else {
+      io.emit('receive-message', {
+        sender: data.sender,
+        text: data.text,
+        isPrivate: false
       });
     }
   });
 
-  // Signal WebRTC: Make Answer
-  socket.on('make-answer', (data) => {
-    io.to(data.to).emit('answer-made', {
-      socket: socket.id,
-      answer: data.answer
+  socket.on('call-user', (data) => {
+    io.to(data.userToCall).emit('incoming-call', {
+      signal: data.signalData,
+      from: socket.id,
+      callerName: data.callerName
     });
   });
 
-  // Signal WebRTC: ICE Candidate
+  socket.on('answer-call', (data) => {
+    io.to(data.to).emit('call-accepted', data.signal);
+  });
+
   socket.on('ice-candidate', (data) => {
     io.to(data.to).emit('ice-candidate', {
       candidate: data.candidate,
@@ -135,69 +157,30 @@ io.on('connection', (socket) => {
     });
   });
 
-  // End Call Signal
   socket.on('end-call', (data) => {
     if (data && data.to) {
       io.to(data.to).emit('call-ended');
     }
   });
 
-  // Chat Messenger
-  socket.on('send-chat', (data) => {
-    const sender = activeSockets[socket.id] || 'Anonim';
-    
-    if (data.targetUser) {
-      // Private Chat / DM
-      const targetSocketId = userSockets[data.targetUser];
-      if (targetSocketId) {
-        io.to(targetSocketId).emit('receive-chat', {
-          sender,
-          message: data.message,
-          isPrivate: true
-        });
-        socket.emit('receive-chat', {
-          sender: `Saya (ke ${data.targetUser})`,
-          message: data.message,
-          isPrivate: true
-        });
-      }
-    } else {
-      // Public Chat
-      io.emit('receive-chat', {
-        sender,
-        message: data.message,
-        isPrivate: false
-      });
-    }
-  });
-
-  // Handle Disconnect
   socket.on('disconnect', () => {
-    const username = activeSockets[socket.id];
-    if (username) {
-      delete userSockets[username];
-      delete activeSockets[socket.id];
-      broadcastOnlineUsers();
-    }
-    console.log(`Socket terputus: ${socket.id}`);
+    console.log(`[SOCKET DISCONNECT] ID: ${socket.id}`);
+    delete onlineSockets[socket.id];
+    broadcastOnlineUsers();
   });
-
-  function broadcastOnlineUsers() {
-    const onlineList = [];
-    for (const [uname, sId] of Object.entries(userSockets)) {
-      const uData = usersDB[uname];
-      onlineList.push({
-        username: uname,
-        socketId: sId,
-        profile: uData ? uData.profile : null
-      });
-    }
-    io.emit('update-user-list', onlineList);
-  }
 });
 
-// Server Listening
+function broadcastOnlineUsers() {
+  const usersList = Object.keys(onlineSockets).map(socketId => ({
+    socketId: socketId,
+    username: onlineSockets[socketId],
+    profile: usersDB[onlineSockets[socketId]] ? usersDB[onlineSockets[socketId]].profile : null
+  }));
+
+  io.emit('update-user-list', usersList);
+}
+
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`Server berjalan di port ${PORT}`);
+  console.log(`Server aktif di port ${PORT}`);
 });
