@@ -1,5 +1,6 @@
 let socket;
 let currentUser = localStorage.getItem('currentUser') || null;
+let userProfile = JSON.parse(localStorage.getItem('userProfile')) || null;
 let currentTargetSocketId = null;
 let localStream = null;
 let peerConnection = null;
@@ -25,11 +26,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // AUTENTIKASI
 async function register() {
-  const usernameInput = document.getElementById('authUsername');
-  const passwordInput = document.getElementById('authPassword');
-
-  const username = usernameInput ? usernameInput.value.trim() : '';
-  const password = passwordInput ? passwordInput.value.trim() : '';
+  const username = document.getElementById('authUsername').value.trim();
+  const password = document.getElementById('authPassword').value.trim();
 
   if (!username || !password) {
     alert('Harap isi Username dan Password!');
@@ -42,21 +40,16 @@ async function register() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password })
     });
-
     const data = await res.json();
     alert(data.message);
   } catch (err) {
-    console.error('Error Register:', err);
     alert('Terjadi kesalahan koneksi ke server!');
   }
 }
 
 async function login() {
-  const usernameInput = document.getElementById('authUsername');
-  const passwordInput = document.getElementById('authPassword');
-
-  const username = usernameInput ? usernameInput.value.trim() : '';
-  const password = passwordInput ? passwordInput.value.trim() : '';
+  const username = document.getElementById('authUsername').value.trim();
+  const password = document.getElementById('authPassword').value.trim();
 
   if (!username || !password) {
     alert('Harap isi Username dan Password!');
@@ -69,17 +62,18 @@ async function login() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password })
     });
-
     const data = await res.json();
 
     if (res.ok && data.success) {
-      currentUser = data.username;
+      currentUser = data.username.toLowerCase();
+      userProfile = data.profile;
       localStorage.setItem('currentUser', currentUser);
+      localStorage.setItem('userProfile', JSON.stringify(userProfile));
 
       document.getElementById('authSection').classList.add('hidden');
 
-      if (data.profile && data.profile.fullName) {
-        showMainDashboard(data.profile);
+      if (userProfile && userProfile.fullName) {
+        showMainDashboard();
       } else {
         document.getElementById('profileSection').classList.remove('hidden');
       }
@@ -87,14 +81,14 @@ async function login() {
       alert(data.message || 'Login gagal!');
     }
   } catch (err) {
-    console.error('Error Login:', err);
     alert('Terjadi kesalahan koneksi ke server!');
   }
 }
 
 function logout() {
-  localStorage.removeItem('currentUser');
+  localStorage.clear();
   currentUser = null;
+  userProfile = null;
   location.reload();
 }
 
@@ -103,7 +97,7 @@ function checkUserSession() {
   showMainDashboard();
 }
 
-// MANAGEMENT TAB NAVIGASI
+// MANAGEMENT TAB
 function switchTab(tabName) {
   document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
   document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
@@ -168,7 +162,7 @@ async function saveProfile() {
         fullName,
         age,
         birthYear,
-        photo: compressedPhotoBase64
+        photo: compressedPhotoBase64 || (userProfile ? userProfile.photo : null)
       })
     });
 
@@ -176,51 +170,80 @@ async function saveProfile() {
 
     if (res.ok && data.success) {
       alert('Profil berhasil diperbarui!');
+      userProfile = data.profile;
+      localStorage.setItem('userProfile', JSON.stringify(userProfile));
+
       document.getElementById('profileSection').classList.add('hidden');
-      showMainDashboard(data.profile);
+      showMainDashboard();
     } else {
       alert(data.message || 'Gagal menyimpan profil.');
     }
   } catch (err) {
-    console.error('Error Save Profile:', err);
     alert('Terjadi kesalahan saat menyimpan profil!');
   }
 }
 
 function editProfile() {
+  if (userProfile) {
+    document.getElementById('profFullName').value = userProfile.fullName || '';
+    document.getElementById('profAge').value = userProfile.age || '';
+    document.getElementById('profBirthYear').value = userProfile.birthYear || '';
+  }
   document.getElementById('mainSection').classList.add('hidden');
+  document.getElementById('bottomNav').classList.add('hidden');
   document.getElementById('profileSection').classList.remove('hidden');
 }
 
+function updateMyProfileUI() {
+  document.getElementById('displayUsername').innerText = currentUser || '-';
+  if (userProfile) {
+    document.getElementById('displayFullName').innerText = userProfile.fullName || '-';
+    document.getElementById('displayAge').innerText = userProfile.age || '-';
+    document.getElementById('displayBirthYear').innerText = userProfile.birthYear || '-';
+    if (userProfile.photo) {
+      document.getElementById('myProfilePhoto').src = userProfile.photo;
+    }
+  }
+}
+
 // SOCKET & DASHBOARD UTAMA
-function showMainDashboard(profileData) {
+function showMainDashboard() {
   document.getElementById('authSection').classList.add('hidden');
   document.getElementById('profileSection').classList.add('hidden');
   document.getElementById('mainSection').classList.remove('hidden');
+  document.getElementById('bottomNav').classList.remove('hidden');
 
-  document.getElementById('displayUsername').innerText = currentUser;
-  if (profileData) {
-    document.getElementById('displayFullName').innerText = profileData.fullName || currentUser;
-    if (profileData.photo) {
-      document.getElementById('myProfilePhoto').src = profileData.photo;
-    }
+  updateMyProfileUI();
+  
+  if (socket && currentUser) {
+    socket.emit('user-online', currentUser);
   }
 
-  socket.emit('user-online', currentUser);
   switchTab('home');
 }
 
 function setupSocketListeners() {
+  socket.on('connect', () => {
+    if (currentUser) {
+      socket.emit('user-online', currentUser);
+    }
+  });
+
   socket.on('update-user-list', (users) => {
     const userGrid = document.getElementById('userGrid');
     if (!userGrid) return;
 
     userGrid.innerHTML = '';
 
-    const otherUsers = users.filter(u => u.username !== currentUser);
+    const currentClean = (currentUser || '').trim().toLowerCase();
+    const otherUsers = users.filter(u => (u.username || '').trim().toLowerCase() !== currentClean);
 
     if (otherUsers.length === 0) {
-      userGrid.innerHTML = `<p style="grid-column: 1/-1; text-align:center; color:#888; padding:20px;">Belum ada pengguna lain yang aktif saat ini.</p>`;
+      userGrid.innerHTML = `
+        <div style="grid-column: 1/-1; text-align:center; color:#666; padding:30px 10px; font-size:13px;">
+          Belum ada pengguna lain yang aktif.<br>
+          <small style="color:#888;">Pastikan laptop & HP sudah login dengan <b>username berbeda</b>.</small>
+        </div>`;
       return;
     }
 
@@ -229,7 +252,9 @@ function setupSocketListeners() {
       card.className = 'user-card';
 
       const displayName = (u.profile && u.profile.fullName) ? u.profile.fullName : u.username;
-      const photoSrc = (u.profile && u.profile.photo) ? u.profile.photo : 'https://via.placeholder.com/150';
+      const photoSrc = (u.profile && u.profile.photo) 
+        ? u.profile.photo 
+        : 'https://via.placeholder.com/150/0072ff/ffffff?text=' + encodeURIComponent(displayName.charAt(0).toUpperCase());
 
       card.innerHTML = `
         <div class="user-card-img" style="background-image: url('${photoSrc}');">
@@ -238,8 +263,8 @@ function setupSocketListeners() {
         <div class="user-card-info">
           <strong>${displayName}</strong>
           <div class="user-card-actions">
-            <button type="button" class="btn btn-primary" style="font-size:11px; padding:6px 10px;" onclick="startCall('${u.socketId}')">Panggil</button>
-            <button type="button" class="btn btn-secondary" style="font-size:11px; padding:6px 10px;" onclick="goToPrivateChat('${u.socketId}', '${displayName}')">Pesan</button>
+            <button type="button" class="btn btn-primary" style="font-size:11px; padding:6px 8px;" onclick="startCall('${u.socketId}')">Panggil</button>
+            <button type="button" class="btn btn-secondary" style="font-size:11px; padding:6px 8px;" onclick="goToPrivateChat('${u.socketId}', '${displayName}')">Pesan</button>
           </div>
         </div>
       `;
@@ -300,7 +325,7 @@ function setupSocketListeners() {
   });
 }
 
-// LOGIKA CHAT & ALIH TAB PESAN AUTOMATIS
+// CHAT MANAGEMENT
 function goToPrivateChat(socketId, name) {
   setPrivateChatTarget(socketId, name);
   switchTab('chat');
@@ -308,7 +333,7 @@ function goToPrivateChat(socketId, name) {
 
 function setPrivateChatTarget(socketId, name) {
   currentTargetSocketId = socketId;
-  document.getElementById('chatHeader').innerText = `Obrolan Privat dengan: ${name}`;
+  document.getElementById('chatHeader').innerText = `DM dengan: ${name}`;
   document.getElementById('btnResetChatTarget').classList.remove('hidden');
 }
 
@@ -332,7 +357,7 @@ function sendChatMessage() {
   input.value = '';
 }
 
-// WEBRTC VIDEO CALL
+// WEBRTC VIDEO CALL LOGIC
 async function setupLocalStream() {
   if (!localStream) {
     try {
@@ -340,7 +365,6 @@ async function setupLocalStream() {
       const localVideo = document.getElementById('localVideo');
       if (localVideo) localVideo.srcObject = localStream;
     } catch (err) {
-      console.error('Gagal media:', err);
       alert('Tidak dapat mengakses kamera/mikrofon!');
     }
   }
