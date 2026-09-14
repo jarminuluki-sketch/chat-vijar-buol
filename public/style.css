@@ -1,245 +1,296 @@
-/* ==========================================================================
-   1. RESET & GLOBAL VARIABLES
-   ========================================================================== */
-:root {
-  --primary-color: #00a8ff;
-  --primary-hover: #0097e6;
-  --bg-gradient: linear-gradient(135deg, #0072ff 0%, #00c6ff 100%);
-  --card-bg: #ffffff;
-  --text-color: #2f3640;
-  --text-muted: #718093;
-  --border-color: #dcdde1;
-  --radius: 14px;
-  --shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-}
-
 * {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
-  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
 body {
-  background: var(--bg-gradient);
+  background: linear-gradient(135deg, #0088ff, #00bfff);
   min-height: 100vh;
   display: flex;
   justify-content: center;
   align-items: center;
   padding: 20px;
-  color: var(--text-color);
 }
 
-/* ==========================================================================
-   2. GLOBAL UTILITIES (PENTING UNTUK VISIBILITAS SCREEN)
-   ========================================================================== */
 .hidden {
   display: none !important;
 }
 
-/* ==========================================================================
-   3. CARD & CONTAINER STYLES (WELCOME & AUTH)
-   ========================================================================== */
+/* CARDS FOR WELCOME & AUTH */
 .card {
-  background: var(--card-bg);
+  background: #ffffff;
   width: 100%;
   max-width: 420px;
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
   padding: 30px;
+  border-radius: 16px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
   text-align: center;
-  position: relative;
-  z-index: 5;
-  animation: fadeIn 0.4s ease-in-out;
 }
 
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(15px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* ==========================================================================
-   4. WELCOME SECTION & VIDEO BANNER
-   ========================================================================== */
 .welcome-banner {
   width: 100%;
-  border-radius: 10px;
+  max-height: 220px;
+  border-radius: 12px;
   overflow: hidden;
   margin-bottom: 20px;
-  background-color: #000000;
-  max-height: 220px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .welcome-img {
   width: 100%;
-  height: auto;
-  max-height: 220px;
+  height: 100%;
   object-fit: cover;
-  display: block;
 }
 
-#welcomeSection h2 {
-  font-size: 1.5rem;
-  margin-bottom: 10px;
-  color: #1e272e;
-}
-
-#welcomeSection p {
-  font-size: 0.95rem;
-  color: var(--text-muted);
-  line-height: 1.5;
-  margin-bottom: 25px;
-}
-
-/* ==========================================================================
-   5. BUTTON STYLES
-   ========================================================================== */
 .btn {
   width: 100%;
-  padding: 12px 20px;
-  background-color: var(--primary-color);
-  color: #ffffff;
+  padding: 12px;
+  background-color: #0099ff;
   border: none;
-  border-radius: 25px;
+  color: white;
+  font-weight: bold;
   font-size: 1rem;
-  font-weight: 600;
+  border-radius: 25px;
   cursor: pointer;
-  transition: background-color 0.2s ease, transform 0.1s ease;
-  position: relative;
-  z-index: 10;
-  display: inline-block;
-  text-align: center;
+  transition: background 0.3s ease;
+  margin-top: 15px;
 }
 
 .btn:hover {
-  background-color: var(--primary-hover);
+  background-color: #0077cc;
 }
 
-.btn:active {
-  transform: scale(0.98);
-}
-
-/* ==========================================================================
-   6. AUTH SECTION (LOGIN / REGISTER)
-   ========================================================================== */
-#authSection {
-  display: block;
-}
-
-#authTitle {
-  margin-bottom: 20px;
-  font-size: 1.4rem;
-  color: #1e272e;
+.btn-secondary {
+  background: #e4e6eb;
+  color: #050505;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 10px;
 }
 
 .input-group {
   text-align: left;
-  margin-bottom: 18px;
+  margin-bottom: 15px;
 }
 
 .input-group label {
   display: block;
   font-size: 0.85rem;
   font-weight: 600;
-  margin-bottom: 6px;
-  color: var(--text-muted);
+  color: #333;
+  margin-bottom: 5px;
 }
 
-.input-group input {
+.input-group input, .input-group textarea {
   width: 100%;
-  padding: 11px 14px;
-  border: 1px solid var(--border-color);
+  padding: 10px 14px;
+  border: 1px solid #ccc;
   border-radius: 8px;
-  font-size: 0.95rem;
   outline: none;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.input-group input:focus {
-  border-color: var(--primary-color);
-  box-shadow: 0 0 0 3px rgba(0, 168, 255, 0.2);
+  font-size: 0.95rem;
 }
 
 .toggle-text {
-  margin-top: 20px;
-  font-size: 0.85rem;
-  color: var(--text-muted);
+  margin-top: 15px;
+  font-size: 0.9rem;
 }
 
 .toggle-text a {
-  color: var(--primary-color);
+  color: #0088ff;
   text-decoration: none;
-  font-weight: 600;
+  font-weight: bold;
 }
 
-.toggle-text a:hover {
-  text-decoration: underline;
-}
-
-/* ==========================================================================
-   7. MAIN APP SECTION (CHAT & VIDEO CALL DASHBOARD)
-   ========================================================================== */
+/* MAIN APP STRUCTURE */
 #appSection {
   width: 100%;
-  max-width: 960px;
-  background: var(--card-bg);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
+  max-width: 1000px;
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  height: 85vh;
-  overflow: hidden;
-  animation: fadeIn 0.4s ease-in-out;
+  min-height: 600px;
 }
 
-/* Area Video Stream Call */
-.video-container {
+/* NAVBAR */
+.navbar {
   display: flex;
-  gap: 12px;
-  padding: 12px;
-  background: #1e272e;
-  justify-content: center;
+  justify-content: space-between;
   align-items: center;
-  min-height: 180px;
+  background-color: #1a252f;
+  color: white;
+  padding: 12px 24px;
 }
 
-video.video-stream {
-  width: 49%;
-  height: 170px;
-  background: #000000;
-  border-radius: 8px;
+.nav-brand {
+  font-weight: bold;
+  font-size: 1.2rem;
+}
+
+.nav-menu {
+  display: flex;
+  gap: 10px;
+}
+
+.nav-btn {
+  background: transparent;
+  border: none;
+  color: #b0bec5;
+  padding: 8px 16px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 20px;
+  transition: all 0.2s ease;
+}
+
+.nav-btn.active, .nav-btn:hover {
+  background-color: #0088ff;
+  color: white;
+}
+
+/* VIDEO CONTAINER */
+.video-container {
+  background: #111;
+  padding: 15px;
+  text-align: center;
+}
+
+.video-wrapper {
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+}
+
+.video-stream {
+  width: 48%;
+  height: 220px;
+  background: #222;
+  border-radius: 10px;
   object-fit: cover;
-  border: 2px solid #354b60;
 }
 
-/* Inner Layout: Sidebar & Chat Area */
+.btn-end-call {
+  background: #ff3b30;
+  color: white;
+  border: none;
+  padding: 8px 20px;
+  border-radius: 20px;
+  margin-top: 10px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+/* TAB CONTENTS */
+.tab-content {
+  padding: 20px;
+  flex: 1;
+}
+
+.section-title {
+  margin-bottom: 20px;
+}
+
+.section-title h3 {
+  color: #1a252f;
+}
+
+.section-title p {
+  color: #666;
+  font-size: 0.9rem;
+}
+
+/* HOME USERS GRID */
+.users-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 20px;
+}
+
+.user-card {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 12px;
+  padding: 15px;
+  text-align: center;
+  transition: transform 0.2s ease;
+}
+
+.user-card:hover {
+  transform: translateY(-3px);
+}
+
+.user-card-avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  object-fit: cover;
+  margin-bottom: 10px;
+  border: 3px solid #0088ff;
+}
+
+.user-card h4 {
+  color: #2b2b2b;
+  margin-bottom: 4px;
+}
+
+.user-card p {
+  color: #6c757d;
+  font-size: 0.82rem;
+  margin-bottom: 12px;
+}
+
+.user-card-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-card {
+  flex: 1;
+  padding: 8px;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.btn-card-msg {
+  background: #e7f3ff;
+  color: #0088ff;
+}
+
+.btn-card-vc {
+  background: #28a745;
+  color: white;
+}
+
+/* CHAT SECTION (MESSAGES TAB) */
 .app-content {
   display: flex;
-  flex: 1;
-  height: calc(100% - 194px);
+  height: 500px;
+  border: 1px solid #e0e0e0;
+  border-radius: 10px;
   overflow: hidden;
 }
 
-/* Sidebar List User */
 .sidebar {
-  width: 30%;
-  border-right: 1px solid var(--border-color);
+  width: 250px;
   background: #f8f9fa;
+  border-right: 1px solid #e0e0e0;
   padding: 15px;
-  overflow-y: auto;
 }
 
 .sidebar h3 {
-  font-size: 1.05rem;
-  margin-bottom: 12px;
-  color: #2f3640;
+  font-size: 1rem;
+  margin-bottom: 10px;
+  color: #333;
 }
 
 #userList {
@@ -247,132 +298,116 @@ video.video-stream {
 }
 
 #userList li {
-  padding: 12px;
+  padding: 10px 12px;
+  background: white;
+  margin-bottom: 8px;
   border-radius: 8px;
   cursor: pointer;
-  margin-bottom: 8px;
-  background: #ffffff;
-  border: 1px solid var(--border-color);
-  font-size: 0.9rem;
-  font-weight: 500;
-  transition: all 0.2s ease;
+  border: 1px solid #eee;
+  transition: all 0.2s;
 }
 
 #userList li:hover {
-  background: var(--primary-color);
-  color: #ffffff;
-  border-color: var(--primary-color);
+  background: #0088ff;
+  color: white;
 }
 
-/* Chat Container Area */
 .chat-area {
-  width: 70%;
+  flex: 1;
   display: flex;
   flex-direction: column;
-  background: #ffffff;
 }
 
 .chat-header {
-  padding: 15px 20px;
-  border-bottom: 1px solid var(--border-color);
-  font-weight: 600;
+  padding: 12px 15px;
+  background: #ffffff;
+  border-bottom: 1px solid #e0e0e0;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #ffffff;
+  font-weight: bold;
 }
 
 .messages-container {
   flex: 1;
-  padding: 20px;
+  padding: 15px;
+  background: #f4f6f8;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  background: #f5f6fa;
+  gap: 10px;
 }
 
 .message {
-  max-width: 70%;
+  max-width: 65%;
   padding: 10px 14px;
   border-radius: 12px;
   font-size: 0.9rem;
-  line-height: 1.4;
-  word-wrap: break-word;
 }
 
 .message.incoming {
+  background: white;
   align-self: flex-start;
-  background: #ffffff;
-  color: #2f3640;
-  border: 1px solid var(--border-color);
-  border-bottom-left-radius: 2px;
+  border: 1px solid #e0e0e0;
 }
 
 .message.outgoing {
+  background: #0088ff;
+  color: white;
   align-self: flex-end;
-  background: var(--primary-color);
-  color: #ffffff;
-  border-bottom-right-radius: 2px;
 }
 
 .chat-input-area {
-  padding: 15px 20px;
-  border-top: 1px solid var(--border-color);
+  padding: 12px 15px;
+  background: white;
+  border-top: 1px solid #e0e0e0;
   display: flex;
   gap: 10px;
   align-items: center;
-  background: #ffffff;
+}
+
+.btn-icon {
+  background: #f0f2f5;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 50%;
+  cursor: pointer;
 }
 
 .chat-input-area input[type="text"] {
   flex: 1;
-  padding: 10px 16px;
-  border: 1px solid var(--border-color);
+  padding: 10px;
+  border: 1px solid #ccc;
   border-radius: 20px;
   outline: none;
-  font-size: 0.95rem;
 }
 
-.chat-input-area input[type="text"]:focus {
-  border-color: var(--primary-color);
+/* PROFIL SAYA */
+.profile-card {
+  max-width: 500px;
+  margin: 0 auto;
+  background: #ffffff;
+  padding: 20px;
+  border-radius: 12px;
 }
 
-.btn-icon {
-  background: #f1f2f6;
-  border: 1px solid var(--border-color);
-  padding: 8px 12px;
+.profile-card h3 {
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.avatar-upload-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.avatar-preview {
+  width: 100px;
+  height: 100px;
   border-radius: 50%;
-  cursor: pointer;
-  font-size: 1.1rem;
-  transition: background 0.2s ease;
-}
-
-.btn-icon:hover {
-  background: #eccc68;
-}
-
-/* ==========================================================================
-   8. RESPONSIVE DESIGN (HP & TABLET)
-   ========================================================================== */
-@media (max-width: 768px) {
-  body {
-    padding: 10px;
-  }
-
-  #appSection {
-    height: 95vh;
-  }
-
-  .sidebar {
-    width: 35%;
-  }
-
-  .chat-area {
-    width: 65%;
-  }
-
-  video.video-stream {
-    height: 120px;
-  }
+  object-fit: cover;
+  border: 3px solid #0088ff;
+  margin-bottom: 10px;
 }
