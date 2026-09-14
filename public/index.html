@@ -10,20 +10,42 @@
 <body>
 
   <!-- 1. LANDING / WELCOME SCREEN -->
-  <div id="welcomeSection">
-    <div class="welcome-card">
-      <div class="welcome-banner">
-        <video autoplay loop muted playsinline class="welcome-img">
-          <source src="welcome-banner.mp4" type="video/mp4">
-          Browser Anda tidak mendukung pemutaran video.
-        </video>
+  <div id="welcomeSection" class="card">
+    <div class="welcome-banner">
+      <video autoplay loop muted playsinline class="welcome-img">
+        <source src="welcome-banner.mp4" type="video/mp4">
+        <img src="welcome-banner.png" alt="APP Chat dan VC" class="welcome-img">
+      </video>
+    </div>
+
+    <h2>Selamat Datang!</h2>
+    <p>Nikmati kemudahan berkomunikasi secara real-time melalui obrolan teks dan panggilan video interaktif dalam satu aplikasi.</p>
+    
+    <button id="startBtn" class="btn">Mulai</button>
+  </div>
+
+  <!-- 2. LOGIN / REGISTER SCREEN -->
+  <div id="authSection" class="card hidden">
+    <h2 id="authTitle">Masuk Aplikasi</h2>
+    
+    <form id="authForm">
+      <div class="input-group">
+        <label for="username">Username</label>
+        <input type="text" id="username" placeholder="Masukkan username" required>
+      </div>
+      
+      <div class="input-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" placeholder="Masukkan password" required>
       </div>
 
-      <h2>Selamat Datang!</h2>
-      <p>Nikmati kemudahan berkomunikasi secara real-time melalui obrolan teks dan panggilan video interaktif dalam satu aplikasi.</p>
-      
-      <button id="startBtn" class="btn">Mulai</button>
-    </div>
+      <button type="submit" id="authSubmitBtn" class="btn">Masuk</button>
+    </form>
+
+    <p class="toggle-text">
+      <span id="toggleAuthText">Belum punya akun?</span>
+      <a href="#" id="toggleAuthLink">Daftar di sini</a>
+    </p>
   </div>
 
   <script src="app.js"></script>
