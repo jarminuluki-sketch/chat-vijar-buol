@@ -1,580 +1,164 @@
-// =========================================================================
-// 1. KONEKSI SOCKET.IO
-// =========================================================================
-let socket = io({ 
-  transports: ['websocket', 'polling'],
-  reconnection: true,
-  reconnectionAttempts: 15,
-  reconnectionDelay: 1000
-});
-
-// Variable Global WebRTC & State Aplikasi
-let peerConnections = {}; 
-let pendingCandidates = {}; 
-let localStream = null;
-let currentUsername = '';
-let targetChatUser = '';
-let photoBase64 = '';
-let activeCallUsers = new Set(); 
-
-const localVideo = document.getElementById('localVideo');
-const videoGrid = document.getElementById('videoGrid');
-const chatBox = document.getElementById('chat-box');
-
-let isMicMuted = false;
-let isCamOff = false;
-
-// =========================================================================
-// 2. KONFIGURASI RTC (MULTI-TURN SERVER FALLBACK UNTUK JARINGAN SELULER)
-// =========================================================================
-const rtcConfig = {
-  iceServers: [
-    // STUN Server Publik Google
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun2.l.google.com:19302' },
-    { urls: 'stun:stun3.l.google.com:19302' },
-
-    // Primary TURN: Metered Server
-    {
-      urls: [
-        "turn:global.relays.metered.ca:80",
-        "turn:global.relays.metered.ca:80?transport=tcp",
-        "turn:global.relays.metered.ca:443",
-        "turns:global.relays.metered.ca:443?transport=tcp"
-      ],
-      username: "b6547ac0c823c059fad69fe9",
-      credential: "UU7TF5yHhpY9K8g2"
-    },
-
-    // Secondary Backup TURN: OpenRelay (Cadangan Gratis Publik)
-    {
-      urls: [
-        "turn:openrelay.metered.ca:80",
-        "turn:openrelay.metered.ca:443",
-        "turn:openrelay.metered.ca:443?transport=tcp"
-      ],
-      username: "openrelay",
-      credential: "openrelay"
-    }
-  ],
-  iceTransportPolicy: 'all', 
-  bundlePolicy: 'max-bundle',
-  rtcpMuxPolicy: 'require'
-};
-
-// =========================================================================
-// 3. INISIALISASI & AUTENTIKASI
-// =========================================================================
-window.addEventListener('DOMContentLoaded', () => {
-  const savedUser = localStorage.getItem('app_username');
-  if (savedUser) {
-    socket.emit('login_account', { username: savedUser, autoLogin: true });
-  }
-});
-
-// Bersihkan koneksi saat tab ditutup / direfresh
-window.addEventListener('beforeunload', () => {
-  endCall();
-});
-
-function register() {
-  const username = document.getElementById('authUsername').value.trim();
-  const password = document.getElementById('authPassword').value.trim();
-  if (!username || !password) return alert('Isi username dan password!');
-  socket.emit('register_account', { username, password });
-}
-
-function login() {
-  const username = document.getElementById('authUsername').value.trim();
-  const password = document.getElementById('authPassword').value.trim();
-  if (!username || !password) return alert('Isi username dan password!');
-  socket.emit('login_account', { username, password, isGoogle: false });
-}
-
-function handleCredentialResponse(response) {
-  try {
-    const base64Url = response.credential.split('.')[1];
-    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    const jsonPayload = decodeURIComponent(atob(base64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
-    const profile = JSON.parse(jsonPayload);
-    socket.emit('login_account', { isGoogle: true, googleProfile: profile });
-  } catch (e) {
-    alert('Gagal autentikasi Google.');
-  }
-}
-
-socket.on('register_response', (data) => {
-  if (data.success) {
-    handleLoginSuccess(data);
-  } else {
-    alert(data.message);
-  }
-});
-
-socket.on('login_response', (data) => {
-  if (data.success) {
-    handleLoginSuccess(data);
-  } else {
-    localStorage.removeItem('app_username');
-    if (!data.autoLogin) alert(data.message);
-  }
-});
-
-function handleLoginSuccess(data) {
-  currentUsername = data.username;
-  localStorage.setItem('app_username', currentUsername);
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aplikasi Obrolan & Panggilan Video</title>
   
-  const displayEl = document.getElementById('displayUsername');
-  if (displayEl) displayEl.textContent = currentUsername;
-  
-  const authSec = document.getElementById('authSection');
-  if (authSec) authSec.classList.add('hidden');
+  <!-- CSS Utama -->
+  <link rel="stylesheet" href="style.css">
 
-  if (!data.profile || !data.profile.fullName || !data.profile.age) {
-    const profSec = document.getElementById('profileSection');
-    if (profSec) profSec.classList.remove('hidden');
-  } else {
-    const mainSec = document.getElementById('mainSection');
-    if (mainSec) mainSec.classList.remove('hidden');
-    socket.emit('get_user_list');
-  }
-  initWebRTCListeners();
-}
+  <!-- Google Sign-In SDK -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
 
-function logout() {
-  endCall();
-  localStorage.removeItem('app_username');
-  socket.emit('logout_account');
-  location.reload();
-}
+  <div class="container">
+    <!-- HEADER APLIKASI -->
+    <h2>Aplikasi Obrolan & Panggilan Video</h2>
 
-// =========================================================================
-// 4. PROFIL & KOMPRESI GAMBAR
-// =========================================================================
-const profPhotoInput = document.getElementById('profPhotoInput');
-if (profPhotoInput) {
-  profPhotoInput.addEventListener('change', function(e) {
-    const file = e.target.files[0];
-    const statusDiv = document.getElementById('uploadStatus');
-    if (file) {
-      if (statusDiv) statusDiv.textContent = "Mengompres foto...";
-      const reader = new FileReader();
-      reader.onload = function(event) {
-        const img = new Image();
-        img.src = event.target.result;
-        img.onload = function() {
-          const canvas = document.createElement('canvas');
-          const MAX_WIDTH = 300;
-          const scaleFactor = MAX_WIDTH / img.width;
-          canvas.width = MAX_WIDTH;
-          canvas.height = img.height * scaleFactor;
-
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-          photoBase64 = canvas.toDataURL('image/jpeg', 0.7);
-          if (statusDiv) statusDiv.textContent = "Foto siap!";
-        };
-      };
-      reader.readAsDataURL(file);
-    }
-  });
-}
-
-function saveProfile() {
-  const fullName = document.getElementById('profFullName').value.trim();
-  const age = document.getElementById('profAge').value.trim();
-  const birthYear = document.getElementById('profBirthYear').value.trim();
-
-  if (!fullName || !age || !birthYear) return alert('Lengkapi semua data!');
-
-  const btn = document.getElementById('btnSaveProfile');
-  if (btn) {
-    btn.disabled = true;
-    btn.textContent = "Menyimpan...";
-  }
-
-  socket.emit('update_profile', { fullName, age, birthYear, photo: photoBase64 });
-}
-
-socket.on('profile_updated', (data) => {
-  const btn = document.getElementById('btnSaveProfile');
-  if (btn) {
-    btn.disabled = false;
-    btn.textContent = "Simpan & Lanjutkan";
-  }
-
-  if (data.success) {
-    document.getElementById('profileSection').classList.add('hidden');
-    document.getElementById('mainSection').classList.remove('hidden');
-    socket.emit('get_user_list');
-  } else {
-    alert(data.message || 'Gagal menyimpan profil.');
-  }
-});
-
-function editProfile() {
-  document.getElementById('mainSection').classList.add('hidden');
-  document.getElementById('profileSection').classList.remove('hidden');
-}
-
-// =========================================================================
-// 5. DAFTAR PENGGUNA ONLINE
-// =========================================================================
-socket.on('user_list_updated', (userList) => {
-  const userGrid = document.getElementById('userGrid');
-  if (!userGrid) return;
-  userGrid.innerHTML = '';
-
-  userList.forEach(user => {
-    if (user.username === currentUsername) return;
-
-    const card = document.createElement('div');
-    card.className = 'user-card';
-    
-    let callBtnHtml = '';
-    if (activeCallUsers.size > 0) {
-      if (activeCallUsers.has(user.username)) {
-        callBtnHtml = `<button class="btn btn-secondary" style="font-size:11px;" disabled>Dalam Panggilan</button>`;
-      } else {
-        callBtnHtml = `<button class="btn btn-warning" style="font-size:11px;" onclick="startCallWith('${user.username}', '${user.fullName}')">+ Tambah ke Panggilan</button>`;
-      }
-    } else {
-      callBtnHtml = `<button class="btn btn-success" style="font-size:11px;" onclick="startCallWith('${user.username}', '${user.fullName}')">Panggil Video</button>`;
-    }
-
-    card.innerHTML = `
-      <img src="${user.photo || 'https://via.placeholder.com/150'}" alt="Foto ${user.fullName}">
-      <h4>${user.fullName}</h4>
-      <p>Umur: ${user.age} Thn (${user.birthYear})</p>
-      <div class="card-actions">
-        ${callBtnHtml}
-        <button class="btn btn-primary" style="font-size:11px;" onclick="selectChatTarget('${user.username}', '${user.fullName}')">Chat DM</button>
-      </div>
-    `;
-    userGrid.appendChild(card);
-  });
-});
-
-// =========================================================================
-// 6. CHAT TEKS & DM PRIVAT
-// =========================================================================
-function selectChatTarget(username, fullName) {
-  targetChatUser = username;
-  document.getElementById('chatHeader').textContent = `Obrolan Privat (DM) dengan: ${fullName}`;
-  document.getElementById('btnResetChatTarget').classList.remove('hidden');
-}
-
-function resetChatTarget() {
-  targetChatUser = '';
-  document.getElementById('chatHeader').textContent = `Obrolan Teks (Publik)`;
-  document.getElementById('btnResetChatTarget').classList.add('hidden');
-}
-
-function sendChatMessage() {
-  const msgInput = document.getElementById('msgInput');
-  const message = msgInput.value.trim();
-  if (!message) return;
-
-  socket.emit('send_chat', { to: targetChatUser, message: message });
-
-  if (targetChatUser) {
-    appendMessage(`Saya (Private ke ${targetChatUser}): ${message}`, true);
-  } else {
-    appendMessage(`Saya: ${message}`, false);
-  }
-
-  msgInput.value = '';
-}
-
-socket.on('receive_chat', (data) => {
-  if (data.from === currentUsername) return;
-  const prefix = data.isPrivate ? `[DM] ${data.senderName}` : data.senderName;
-  appendMessage(`${prefix}: ${data.message}`, data.isPrivate);
-});
-
-function appendMessage(text, isPrivate = false) {
-  if (!chatBox) return;
-  const div = document.createElement('div');
-  div.className = isPrivate ? 'msg msg-private' : 'msg';
-  div.textContent = text;
-  chatBox.appendChild(div);
-  chatBox.scrollTop = chatBox.scrollHeight;
-}
-
-// =========================================================================
-// 7. WEBRTC ENGINE (PANGGILAN VIDEO + AUTO ICE RESTART)
-// =========================================================================
-function initWebRTCListeners() {
-  socket.off('incoming_call');
-  socket.off('call_accepted');
-  socket.off('receive_ice_candidate');
-  socket.off('call_ended_by_peer');
-  socket.off('call_failed');
-
-  socket.on('incoming_call', async (data) => {
-    const callerName = data.callerProfile?.fullName || data.from;
-    const accept = confirm(`Panggilan video dari ${callerName}. Angkat?`);
-    if (!accept) return;
-
-    document.getElementById('callContainer').classList.remove('hidden');
-    activeCallUsers.add(data.from);
-    socket.emit('get_user_list');
-
-    try {
-      const pc = await createPeerConnection(data.from, callerName);
-      await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+    <!-- =================================================================== -->
+    <!-- SECTION 1: AUTENTIKASI (LOGIN / REGISTER)                          -->
+    <!-- =================================================================== -->
+    <div id="authSection">
+      <h3>Masuk / Daftar Akun</h3>
       
-      await processPendingCandidates(data.from, pc);
+      <div style="margin-bottom: 15px;">
+        <label for="authUsername" style="display:block; font-weight:600; margin-bottom:5px;">Username</label>
+        <input type="text" id="authUsername" placeholder="Masukkan username">
+      </div>
 
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
+      <div style="margin-bottom: 15px;">
+        <label for="authPassword" style="display:block; font-weight:600; margin-bottom:5px;">Password</label>
+        <input type="password" id="authPassword" placeholder="Masukkan password">
+      </div>
 
-      socket.emit('answer_call', { to: data.from, answer: answer });
-    } catch (err) {
-      console.error('Gagal memproses panggilan masuk:', err);
-    }
-  });
+      <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+        <button class="btn btn-primary" onclick="login()">Masuk (Login)</button>
+        <button class="btn btn-secondary" onclick="register()">Daftar Baru</button>
+      </div>
 
-  socket.on('call_accepted', async (data) => {
-    const pc = peerConnections[data.from];
-    if (pc) {
-      try {
-        await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
-        await processPendingCandidates(data.from, pc);
-      } catch (err) {
-        console.error('Gagal setRemoteDescription (answer):', err);
-      }
-    }
-  });
+      <hr style="border:0; border-top: 1px solid #e2e8f0; margin: 20px 0;">
 
-  socket.on('receive_ice_candidate', async (data) => {
-    const pc = peerConnections[data.from];
-    if (pc && pc.remoteDescription && pc.remoteDescription.type) {
-      try {
-        await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
-      } catch (e) {
-        console.error('Gagal menambahkan Candidate:', e);
-      }
-    } else {
-      if (!pendingCandidates[data.from]) pendingCandidates[data.from] = [];
-      pendingCandidates[data.from].push(data.candidate);
-    }
-  });
+      <!-- Google Sign-In Button -->
+      <div style="display: flex; justify-content: center;">
+        <div id="g_id_onload"
+             data-client_id="YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com"
+             data-callback="handleCredentialResponse">
+        </div>
+        <div class="g_id_signin" data-type="standard" data-theme="outline" data-text="sign_in_with"></div>
+      </div>
+    </div>
 
-  socket.on('call_ended_by_peer', (data) => {
-    removePeerVideo(data.from);
-  });
+    <!-- =================================================================== -->
+    <!-- SECTION 2: PENGISIAN PROFIL PENGGUNA                                -->
+    <!-- =================================================================== -->
+    <div id="profileSection" class="hidden">
+      <h3>Lengkapi Profil Anda</h3>
+      <p style="font-size: 13px; color: #666; margin-bottom: 15px;">Silakan lengkapi informasi diri Anda untuk melanjutkan.</p>
 
-  socket.on('call_failed', (data) => alert(data.message));
-}
+      <div style="margin-bottom: 15px;">
+        <label for="profFullName" style="display:block; font-weight:600; margin-bottom:5px;">Nama Lengkap</label>
+        <input type="text" id="profFullName" placeholder="Masukkan nama lengkap">
+      </div>
 
-async function processPendingCandidates(username, pc) {
-  if (pendingCandidates[username] && pendingCandidates[username].length > 0) {
-    for (let cand of pendingCandidates[username]) {
-      try {
-        await pc.addIceCandidate(new RTCIceCandidate(cand));
-      } catch (e) {
-        console.error('Gagal memproses pending candidate:', e);
-      }
-    }
-    delete pendingCandidates[username];
-  }
-}
+      <div style="margin-bottom: 15px;">
+        <label for="profAge" style="display:block; font-weight:600; margin-bottom:5px;">Umur</label>
+        <input type="number" id="profAge" placeholder="Contoh: 25">
+      </div>
 
-async function getLocalStream() {
-  if (!localStream) {
-    try {
-      localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      if (localVideo) localVideo.srcObject = localStream;
-    } catch (err) {
-      alert('Gagal mengakses Kamera/Mikrofon! Harap berikan izin akses.');
-      throw err;
-    }
-  }
-  return localStream;
-}
+      <div style="margin-bottom: 15px;">
+        <label for="profBirthYear" style="display:block; font-weight:600; margin-bottom:5px;">Tahun Lahir</label>
+        <input type="number" id="profBirthYear" placeholder="Contoh: 1999">
+      </div>
 
-async function createPeerConnection(targetUser, displayName) {
-  if (peerConnections[targetUser]) {
-    peerConnections[targetUser].close();
-    delete peerConnections[targetUser];
-  }
+      <div style="margin-bottom: 20px;">
+        <label for="profPhotoInput" style="display:block; font-weight:600; margin-bottom:5px;">Foto Profil</label>
+        <input type="file" id="profPhotoInput" accept="image/*">
+        <div id="uploadStatus" style="font-size:12px; color:#0072ff; margin-top:5px;"></div>
+      </div>
 
-  const stream = await getLocalStream();
-  const pc = new RTCPeerConnection(rtcConfig);
-  peerConnections[targetUser] = pc;
+      <button class="btn btn-primary" id="btnSaveProfile" onclick="saveProfile()">Simpan & Lanjutkan</button>
+    </div>
 
-  stream.getTracks().forEach(track => pc.addTrack(track, stream));
+    <!-- =================================================================== -->
+    <!-- SECTION 3: DASHBOARD UTAMA (VIDEO CALL & CHAT)                      -->
+    <!-- =================================================================== -->
+    <div id="mainSection" class="hidden">
+      <!-- Status User Logged In -->
+      <div style="display: flex; justify-content: space-between; align-items: center; background: #f1f5f9; padding: 12px 18px; border-radius: 10px; margin-bottom: 20px;">
+        <div>
+          <span>Halo, <strong id="displayUsername" style="color: #0072ff;">-</strong></span>
+        </div>
+        <div>
+          <button class="btn btn-secondary" style="font-size:12px; padding:6px 12px;" onclick="editProfile()">Edit Profil</button>
+          <button class="btn btn-danger" style="font-size:12px; padding:6px 12px;" onclick="logout()">Log Out</button>
+        </div>
+      </div>
 
-  pc.ontrack = (event) => {
-    let remoteStream = event.streams && event.streams[0];
-    if (!remoteStream) {
-      remoteStream = new MediaStream();
-      remoteStream.addTrack(event.track);
-    }
-    addOrUpdateRemoteVideo(targetUser, displayName, remoteStream);
-  };
+      <!-- AREA PANGGILAN VIDEO -->
+      <div id="callContainer" class="hidden" style="margin-bottom: 25px;">
+        <div style="display: flex; gap: 10px; justify-content: center; margin-bottom: 15px; background: #e2e8f0; padding: 10px; border-radius: 8px;">
+          <button class="btn btn-warning" id="btnMuteMic" onclick="toggleMic()">Mute Mic</button>
+          <button class="btn btn-warning" id="btnMuteCam" onclick="toggleCam()">Matikan Kamera</button>
+          <button class="btn btn-danger" onclick="endCall()">Akhiri Panggilan</button>
+        </div>
 
-  pc.onicecandidate = (event) => {
-    if (event.candidate) {
-      socket.emit('send_ice_candidate', { to: targetUser, candidate: event.candidate });
-    }
-  };
+        <div class="video-grid" id="videoGrid">
+          <!-- Video Kamera Lokal Saya -->
+          <div class="video-card" id="card-local">
+            <video id="localVideo" autoplay playsinline muted></video>
+            <div class="video-label">Saya (Lokal)</div>
+          </div>
+          <!-- Video Lawan Bicara Akan Muncul Secara Dinamis Di Sini -->
+        </div>
+      </div>
 
-  pc.oniceconnectionstatechange = () => {
-    console.log(`[ICE Connection State] (${targetUser}):`, pc.iceConnectionState);
-    if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
-      console.warn('Sinyal terputus/terhalang. Mencoba menyambung kembali (ICE Restart)...');
-      pc.restartIce();
-    }
-  };
+      <!-- DAFTAR PENGGUNA ONLINE -->
+      <h3 style="margin-top: 20px;">Daftar Pengguna Online</h3>
+      <div class="user-grid" id="userGrid" style="margin-bottom: 25px;">
+        <!-- Pengguna lain akan dimasukkan secara otomatis oleh Socket.IO -->
+      </div>
 
-  return pc;
-}
+      <!-- OBROLAN TEKS & DM PRIVAT -->
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h3 id="chatHeader">Obrolan Teks (Publik)</h3>
+        <button id="btnResetChatTarget" class="btn btn-secondary hidden" style="font-size:11px;" onclick="resetChatTarget()">Kembali ke Chat Publik</button>
+      </div>
 
-async function startCallWith(username, fullName) {
-  document.getElementById('callContainer').classList.remove('hidden');
-  activeCallUsers.add(username);
-  socket.emit('get_user_list');
+      <div id="chat-box"></div>
 
-  try {
-    const pc = await createPeerConnection(username, fullName);
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
+      <div style="display: flex; gap: 10px;">
+        <input type="text" id="msgInput" placeholder="Ketik pesan..." style="margin-bottom: 0;" onkeypress="if(event.key==='Enter') sendChatMessage()">
+        <button class="btn btn-primary" onclick="sendChatMessage()">Kirim</button>
+      </div>
+    </div>
+  </div>
 
-    socket.emit('call_user', { userToCall: username, offer: offer });
-  } catch (err) {
-    console.error('Gagal memulai panggilan:', err);
-  }
-}
-
-function addOrUpdateRemoteVideo(username, displayName, stream) {
-  let card = document.getElementById(`card-${username}`);
-  let video;
-
-  if (!card) {
-    card = document.createElement('div');
-    card.className = 'video-card';
-    card.id = `card-${username}`;
-
-    video = document.createElement('video');
-    video.id = `video-${username}`;
-    video.autoplay = true;
-    video.playsInline = true;
-    video.setAttribute('playsinline', '');
-
-    const label = document.createElement('div');
-    label.className = 'video-label';
-    label.textContent = displayName || username;
-
-    card.appendChild(video);
-    card.appendChild(label);
-    if (videoGrid) videoGrid.appendChild(card);
-  } else {
-    video = document.getElementById(`video-${username}`);
-  }
-
-  if (video && video.srcObject !== stream) {
-    video.srcObject = stream;
-    
-    // Autoplay fail-safe di HP
-    const playPromise = video.play();
-    if (playPromise !== undefined) {
-      playPromise.catch(() => {
-        video.muted = true;
-        video.play().catch(e => console.error("Gagal auto-play:", e));
-      });
-    }
-  }
-}
-
-function removePeerVideo(username) {
-  if (peerConnections[username]) {
-    peerConnections[username].close();
-    delete peerConnections[username];
-  }
-  activeCallUsers.delete(username);
+  <!-- Socket.IO Client Library -->
+  <script src="/socket.io/socket.io.js"></script>
   
-  const card = document.getElementById(`card-${username}`);
-  if (card) card.remove();
+  <!-- App Logic JavaScript -->
+  <script src="app.js"></script>
 
-  if (activeCallUsers.size === 0) {
-    document.getElementById('callContainer').classList.add('hidden');
-  }
-  socket.emit('get_user_list');
-}
-
-// =========================================================================
-// 8. KONTROL MIKROFON & KAMERA
-// =========================================================================
-function toggleMic() {
-  if (!localStream) return;
-  const audioTrack = localStream.getAudioTracks()[0];
-  if (audioTrack) {
-    isMicMuted = !isMicMuted;
-    audioTrack.enabled = !isMicMuted;
-    const btn = document.getElementById('btnMuteMic');
-    if (btn) {
-      btn.textContent = isMicMuted ? 'Unmute Mic' : 'Mute Mic';
-      btn.className = isMicMuted ? 'btn btn-danger' : 'btn btn-warning';
-    }
-  }
-}
-
-function toggleCam() {
-  if (!localStream) return;
-  const videoTrack = localStream.getVideoTracks()[0];
-  if (videoTrack) {
-    isCamOff = !isCamOff;
-    videoTrack.enabled = !isCamOff;
-    const btn = document.getElementById('btnMuteCam');
-    if (btn) {
-      btn.textContent = isCamOff ? 'Nyalakan Kamera' : 'Matikan Kamera';
-      btn.className = isCamOff ? 'btn btn-danger' : 'btn btn-warning';
-    }
-  }
-}
-
-function endCall() {
-  for (let u of activeCallUsers) {
-    socket.emit('end_call', { to: u });
-    if (peerConnections[u]) {
-      peerConnections[u].close();
-      delete peerConnections[u];
-    }
-  }
-  peerConnections = {};
-  pendingCandidates = {};
-  activeCallUsers.clear();
-  
-  if (videoGrid) {
-    const cards = videoGrid.querySelectorAll('.video-card');
-    cards.forEach(c => {
-      if (c.id !== 'card-local') c.remove();
-    });
-  }
-
-  document.getElementById('callContainer').classList.add('hidden');
-  socket.emit('get_user_list');
-}
-function switchTab(tabName) {
-  // Sembunyikan semua tab section
-  document.querySelectorAll('.tab-content').forEach(section => {
-    section.classList.add('hidden');
-  });
-
-  // Hapus status aktif di tombol navigasi
-  document.querySelectorAll('.nav-item').forEach(btn => {
-    btn.classList.remove('active');
-  });
-
-  // Tampilkan tab yang dipilih
-  const targetSection = document.getElementById(`tab-${tabName}`);
-  if (targetSection) {
-    targetSection.classList.remove('hidden');
-  }
-
-  // Aktifkan ikon navigasi yang diklik
-  event.currentTarget.classList.add('active');
-}
+</body>
+</html>
+<!-- NAVIGASI BAWAH (BOTTOM NAVBAR) -->
+<nav class="bottom-nav">
+  <button class="nav-item active" onclick="switchTab('explore')">
+    <svg class="nav-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+    <span>Jelajahi</span>
+  </button>
+  <button class="nav-item" onclick="switchTab('video-match')">
+    <svg class="nav-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>
+    <span>Video</span>
+  </button>
+  <button class="nav-item" onclick="switchTab('chat')">
+    <svg class="nav-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 9h12v2H6V9zm8 5H6v-2h8v2zm4-6H6V6h12v2z"/></svg>
+    <span>Obrolan</span>
+  </button>
+  <button class="nav-item" onclick="switchTab('profile')">
+    <svg class="nav-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+    <span>Saya</span>
+  </button>
+</nav>
