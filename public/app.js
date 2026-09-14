@@ -1,11 +1,21 @@
 let socket;
 let currentUser = null;
-let userProfile = null;
 let currentTargetSocketId = null;
 let localStream = null;
 let peerConnection = null;
 let activeCallTargetSocketId = null;
 let compressedPhotoBase64 = null;
+let activeUsersData = [];
+
+// Profil Saya (Default)
+let myProfile = {
+  nama: '',
+  umur: '',
+  pekerjaan: '',
+  alamat: '',
+  bio: '',
+  avatar: 'default-avatar.png'
+};
 
 const rtcConfiguration = {
   iceServers: [
@@ -15,22 +25,18 @@ const rtcConfiguration = {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
-  // --- 1. NAVIGASI AWAL & ELEMEN UTAMA ---
   const startBtn = document.getElementById('startBtn');
   const welcomeSection = document.getElementById('welcomeSection');
   const authSection = document.getElementById('authSection');
   const appSection = document.getElementById('appSection');
 
-  // Hapus data login lama dari browser agar selalu tampil Welcome Screen di awal
+  // Hapus data login lama agar selalu dari Welcome Screen
   localStorage.removeItem('currentUser');
-  localStorage.removeItem('userProfile');
 
-  // Pastikan tampilan awal selalu Welcome Screen
   if (welcomeSection) welcomeSection.classList.remove('hidden');
   if (authSection) authSection.classList.add('hidden');
   if (appSection) appSection.classList.add('hidden');
 
-  // Event Listener Tombol Mulai (Welcome Screen -> Auth Screen)
   if (startBtn) {
     startBtn.addEventListener('click', (e) => {
       e.preventDefault();
@@ -39,7 +45,10 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // --- 2. LOGIKA AUTENTIKASI (LOGIN / REGISTER) ---
+  // LOGIKA NAVIGASI TAB MENU (Home, Pesan, Saya)
+  setupNavigation();
+
+  // LOGIKA AUTH FORM
   const authForm = document.getElementById('authForm');
   const toggleAuthLink = document.getElementById('toggleAuthLink');
   const authTitle = document.getElementById('authTitle');
@@ -73,8 +82,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (username) {
         currentUser = username;
-        localStorage.setItem('currentUser', username);
-        
+        myProfile.nama = username;
+        document.getElementById('profNama').value = username;
+
         if (welcomeSection) welcomeSection.classList.add('hidden');
         if (authSection) authSection.classList.add('hidden');
         if (appSection) appSection.classList.remove('hidden');
@@ -85,9 +95,71 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   setupPhotoInputListener();
+  setupProfileForm();
 });
 
-// --- 3. INISIALISASI SOCKET.IO ---
+// --- NAVIGASI TAB ---
+function setupNavigation() {
+  const navHome = document.getElementById('navHome');
+  const navMessages = document.getElementById('navMessages');
+  const navProfile = document.getElementById('navProfile');
+
+  const tabHome = document.getElementById('tabHome');
+  const tabMessages = document.getElementById('tabMessages');
+  const tabProfile = document.getElementById('tabProfile');
+
+  function switchTab(activeBtn, activeTab) {
+    [navHome, navMessages, navProfile].forEach(btn => btn.classList.remove('active'));
+    [tabHome, tabMessages, tabProfile].forEach(tab => tab.classList.add('hidden'));
+
+    activeBtn.classList.add('active');
+    activeTab.classList.remove('hidden');
+  }
+
+  navHome.addEventListener('click', () => switchTab(navHome, tabHome));
+  navMessages.addEventListener('click', () => switchTab(navMessages, tabMessages));
+  navProfile.addEventListener('click', () => switchTab(navProfile, tabProfile));
+}
+
+// --- LOGIKA FORM PROFIL SAYA ---
+function setupProfileForm() {
+  const profileForm = document.getElementById('profileForm');
+  const avatarFileInput = document.getElementById('avatarFileInput');
+  const profileAvatarPreview = document.getElementById('profileAvatarPreview');
+
+  if (avatarFileInput) {
+    avatarFileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          myProfile.avatar = event.target.result;
+          profileAvatarPreview.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+  }
+
+  if (profileForm) {
+    profileForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      myProfile.nama = document.getElementById('profNama').value;
+      myProfile.umur = document.getElementById('profUmur').value;
+      myProfile.pekerjaan = document.getElementById('profPekerjaan').value;
+      myProfile.alamat = document.getElementById('profAlamat').value;
+      myProfile.bio = document.getElementById('profBio').value;
+
+      if (socket) {
+        socket.emit('update-profile', myProfile);
+      }
+
+      alert('Profil jati diri berhasil disimpan!');
+    });
+  }
+}
+
+// --- SOCKET CONNECTION ---
 function initSocketConnection() {
   if (typeof io !== 'undefined') {
     socket = io();
@@ -98,9 +170,11 @@ function initSocketConnection() {
 function setupSocketListeners() {
   if (!socket) return;
 
-  socket.emit('register-user', currentUser);
+  socket.emit('register-user', { username: currentUser, profile: myProfile });
 
   socket.on('update-user-list', (users) => {
+    activeUsersData = users;
+    renderHomeUsersGrid(users);
     renderUserList(users);
   });
 
@@ -108,9 +182,9 @@ function setupSocketListeners() {
     appendMessage(data.sender, data.message, 'incoming', data.image);
   });
 
-  // Listener Signaling WebRTC
   socket.on('call-offer', async (data) => {
     activeCallTargetSocketId = data.from;
+    document.getElementById('videoCallContainer').classList.remove('hidden');
     await handleReceiveOffer(data.offer);
   });
 
@@ -135,24 +209,48 @@ function setupSocketListeners() {
   });
 }
 
-// --- 4. LISTENER INPUT FOTO / GAMBAR ---
-function setupPhotoInputListener() {
-  const photoInput = document.getElementById('photoInput');
-  if (photoInput) {
-    photoInput.addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          compressedPhotoBase64 = event.target.result;
-        };
-        reader.readAsDataURL(file);
-      }
-    });
-  }
+// --- RENDER MENU HOME (GRID USER AKTIF) ---
+function renderHomeUsersGrid(users) {
+  const gridContainer = document.getElementById('activeUsersGrid');
+  if (!gridContainer) return;
+
+  gridContainer.innerHTML = '';
+  users.forEach(user => {
+    if (user.username !== currentUser) {
+      const prof = user.profile || {};
+      const card = document.createElement('div');
+      card.className = 'user-card';
+
+      const avatarSrc = prof.avatar || 'default-avatar.png';
+      const pekerjaanText = prof.pekerjaan ? prof.pekerjaan : 'Pengguna Aktif';
+      const umurText = prof.umur ? `, ${prof.umur} thn` : '';
+
+      card.innerHTML = `
+        <img src="${avatarSrc}" class="user-card-avatar" alt="${user.username}">
+        <h4>${prof.nama || user.username}</h4>
+        <p>${pekerjaanText}${umurText}</p>
+        <div class="user-card-actions">
+          <button class="btn-card btn-card-msg" onclick="openChatWithUser('${user.id}', '${user.username}')">💬 Pesan</button>
+          <button class="btn-card btn-card-vc" onclick="callUserDirectly('${user.id}', '${user.username}')">📹 VC</button>
+        </div>
+      `;
+
+      gridContainer.appendChild(card);
+    }
+  });
 }
 
-// --- 5. RENDER DAFTAR USER ---
+function openChatWithUser(socketId, username) {
+  selectUserToChat(socketId, username);
+  document.getElementById('navMessages').click();
+}
+
+function callUserDirectly(socketId, username) {
+  selectUserToChat(socketId, username);
+  startVideoCall();
+}
+
+// --- RENDER SIDEBAR CHAT ---
 function renderUserList(users) {
   const userListContainer = document.getElementById('userList');
   if (!userListContainer) return;
@@ -161,7 +259,7 @@ function renderUserList(users) {
   users.forEach((user) => {
     if (user.username !== currentUser) {
       const li = document.createElement('li');
-      li.innerText = user.username;
+      li.innerText = user.profile?.nama || user.username;
       li.onclick = () => selectUserToChat(user.id, user.username);
       userListContainer.appendChild(li);
     }
@@ -174,9 +272,11 @@ function selectUserToChat(socketId, username) {
   if (chatHeader) chatHeader.innerText = `Chat dengan ${username}`;
 }
 
-// --- 6. LOGIKA WEBRTC / PANGGILAN VIDEO ---
+// --- WEBRTC LOGIC ---
 async function startVideoCall() {
-  if (!currentTargetSocketId) return alert('Pilih pengguna untuk dipanggil');
+  if (!currentTargetSocketId) return alert('Pilih pengguna terlebih dahulu');
+
+  document.getElementById('videoCallContainer').classList.remove('hidden');
 
   try {
     localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
@@ -210,7 +310,7 @@ async function startVideoCall() {
     });
   } catch (err) {
     console.error("Gagal mengakses kamera/mikrofon:", err);
-    alert("Kamera atau Mikrofon tidak dapat diakses.");
+    alert("Kamera/Mikrofon tidak dapat diakses.");
   }
 }
 
@@ -259,9 +359,26 @@ function closeVideoCall() {
     localStream.getTracks().forEach(track => track.stop());
     localStream = null;
   }
+  document.getElementById('videoCallContainer').classList.add('hidden');
 }
 
-// --- 7. LOGIKA CHAT MESSAGE ---
+// --- LOGIKA PESAN ---
+function setupPhotoInputListener() {
+  const photoInput = document.getElementById('photoInput');
+  if (photoInput) {
+    photoInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          compressedPhotoBase64 = event.target.result;
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+  }
+}
+
 function sendMessage() {
   const messageInput = document.getElementById('messageInput');
   const message = messageInput ? messageInput.value.trim() : '';
