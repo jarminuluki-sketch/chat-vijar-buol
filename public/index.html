@@ -48,16 +48,17 @@
     </p>
   </div>
 
-  <!-- 3. MAIN APP SECTION (CHAT & VIDEO CALL) -->
+  <!-- 3. MAIN APP SECTION (CHAT & VIDEO CALL DASHBOARD) -->
   <div id="appSection" class="hidden">
-    <!-- Area Video Call -->
+    <!-- Area Video Call WebRTC -->
     <div class="video-container">
       <video id="localVideo" class="video-stream" autoplay playsinline muted></video>
       <video id="remoteVideo" class="video-stream" autoplay playsinline></video>
     </div>
 
-    <div style="display: flex; flex: 1; height: calc(100% - 210px);">
-      <!-- Sidebar User List -->
+    <!-- Inner Content: Sidebar & Chat Area -->
+    <div class="app-content">
+      <!-- Sidebar List User -->
       <div class="sidebar">
         <h3>Daftar Pengguna</h3>
         <ul id="userList"></ul>
@@ -74,7 +75,7 @@
 
         <div class="chat-input-area">
           <input type="file" id="photoInput" accept="image/*" style="display: none;">
-          <button type="button" onclick="document.getElementById('photoInput').click()" style="padding: 0 10px; cursor: pointer;">📷</button>
+          <button type="button" class="btn-icon" onclick="document.getElementById('photoInput').click()">📷</button>
           <input type="text" id="messageInput" placeholder="Ketik pesan...">
           <button type="button" onclick="sendMessage()" class="btn" style="width: auto; padding: 8px 18px;">Kirim</button>
         </div>
