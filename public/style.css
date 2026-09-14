@@ -17,20 +17,36 @@ body {
 }
 
 .container {
-  background: rgba(255, 255, 255, 0.95);
+  background: rgba(255, 255, 255, 0.96);
   backdrop-filter: blur(10px);
   border-radius: 16px;
-  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.25);
   padding: 20px;
   max-width: 600px;
   width: 100%;
   margin: 0 auto;
 }
 
-h2 {
+h2, h3 {
   color: #1a2a3a;
-  margin-bottom: 20px;
-  font-size: 20px;
+  margin-bottom: 15px;
+}
+
+/* BANNER WELCOME SCREEN */
+.welcome-banner {
+  width: 100%;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+  margin-bottom: 15px;
+  background: #000;
+}
+
+.welcome-img {
+  width: 100%;
+  height: auto;
+  display: block;
+  object-fit: cover;
 }
 
 input[type="text"],
@@ -80,7 +96,7 @@ textarea {
   color: white;
 }
 
-/* CARDS USER ACTIVE (HOME) */
+/* CARDS USER AKTIF (HOME) */
 .user-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
