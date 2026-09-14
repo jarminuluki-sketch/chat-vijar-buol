@@ -12,33 +12,23 @@ const io = new Server(server, {
   }
 });
 
-// Middleware untuk memproses data JSON dan Form
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
-// Melayani file statis dari folder public
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Database Sementara di Memori Server
-const usersDB = {};       // Data pengguna: { username: { username, password, profile } }
-const onlineSockets = {}; // Mapping Socket: { socketId: username }
+const usersDB = {};       
+const onlineSockets = {}; 
 
-// ==========================================
-// REST API ENDPOINTS
-// ==========================================
-
-// Endpoint Register
+// REST API
 app.post('/api/register', (req, res) => {
   const { username, password } = req.body;
-
   if (!username || !password) {
     return res.status(400).json({ success: false, message: 'Username dan password wajib diisi!' });
   }
 
   const cleanUser = username.trim().toLowerCase();
-
   if (usersDB[cleanUser]) {
-    return res.status(400).json({ success: false, message: 'Username sudah terdaftar! Silakan login.' });
+    return res.status(400).json({ success: false, message: 'Username sudah terdaftar!' });
   }
 
   usersDB[cleanUser] = {
@@ -47,14 +37,11 @@ app.post('/api/register', (req, res) => {
     profile: null
   };
 
-  console.log(`[REGISTER SUCCESS] User terdaftar: ${cleanUser}`);
-  return res.json({ success: true, message: 'Pendaftaran berhasil! Silakan klik Masuk (Login).' });
+  return res.json({ success: true, message: 'Pendaftaran berhasil! Silakan login.' });
 });
 
-// Endpoint Login
 app.post('/api/login', (req, res) => {
   const { username, password } = req.body;
-
   if (!username || !password) {
     return res.status(400).json({ success: false, message: 'Username dan password wajib diisi!' });
   }
@@ -66,7 +53,6 @@ app.post('/api/login', (req, res) => {
     return res.status(401).json({ success: false, message: 'Username atau password salah!' });
   }
 
-  console.log(`[LOGIN SUCCESS] User masuk: ${cleanUser}`);
   return res.json({ 
     success: true, 
     message: 'Login berhasil!', 
@@ -75,37 +61,30 @@ app.post('/api/login', (req, res) => {
   });
 });
 
-// Endpoint Profil
 app.post('/api/profile', (req, res) => {
   const { username, fullName, age, birthYear, photo } = req.body;
-
   if (!username) {
     return res.status(400).json({ success: false, message: 'Sesi username tidak valid!' });
   }
 
   const cleanUser = username.trim().toLowerCase();
-
   if (!usersDB[cleanUser]) {
     return res.status(404).json({ success: false, message: 'Pengguna tidak ditemukan!' });
   }
 
   usersDB[cleanUser].profile = {
     fullName: fullName || cleanUser,
-    age: age || '',
-    birthYear: birthYear || '',
+    age: age || '-',
+    birthYear: birthYear || '-',
     photo: photo || null
   };
 
-  console.log(`[PROFILE UPDATED] User: ${cleanUser}`);
+  broadcastOnlineUsers();
   return res.json({ success: true, message: 'Profil berhasil disimpan!', profile: usersDB[cleanUser].profile });
 });
 
-// ==========================================
-// SOCKET.IO SIGNALING
-// ==========================================
+// SOCKET.IO
 io.on('connection', (socket) => {
-  console.log(`[SOCKET CONNECT] ID: ${socket.id}`);
-
   socket.on('user-online', (username) => {
     if (username) {
       const cleanUser = username.trim().toLowerCase();
@@ -164,7 +143,6 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
-    console.log(`[SOCKET DISCONNECT] ID: ${socket.id}`);
     delete onlineSockets[socket.id];
     broadcastOnlineUsers();
   });
@@ -181,6 +159,4 @@ function broadcastOnlineUsers() {
 }
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`Server aktif di port ${PORT}`);
-});
+server.listen(PORT, () => console.log(`Server jalan di port ${PORT}`));
