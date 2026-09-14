@@ -48,39 +48,108 @@
     </p>
   </div>
 
-  <!-- 3. MAIN APP SECTION (CHAT & VIDEO CALL DASHBOARD) -->
+  <!-- 3. MAIN DASHBOARD SECTION -->
   <div id="appSection" class="hidden">
-    <!-- Area Video Call WebRTC -->
-    <div class="video-container">
-      <video id="localVideo" class="video-stream" autoplay playsinline muted></video>
-      <video id="remoteVideo" class="video-stream" autoplay playsinline></video>
+    
+    <!-- NAVIGATION BAR -->
+    <nav class="navbar">
+      <div class="nav-brand">APP Chat & VC</div>
+      <div class="nav-menu">
+        <button id="navHome" class="nav-btn active">🏠 Home</button>
+        <button id="navMessages" class="nav-btn">💬 Pesan</button>
+        <button id="navProfile" class="nav-btn">👤 Saya</button>
+      </div>
+    </nav>
+
+    <!-- AREA VIDEO CALL GLOBAL -->
+    <div id="videoCallContainer" class="video-container hidden">
+      <div class="video-wrapper">
+        <video id="localVideo" class="video-stream" autoplay playsinline muted></video>
+        <video id="remoteVideo" class="video-stream" autoplay playsinline></video>
+      </div>
+      <button onclick="closeVideoCall()" class="btn-end-call">Akhiri Panggilan</button>
     </div>
 
-    <!-- Inner Content: Sidebar & Chat Area -->
-    <div class="app-content">
-      <!-- Sidebar List User -->
-      <div class="sidebar">
-        <h3>Daftar Pengguna</h3>
-        <ul id="userList"></ul>
+    <!-- TAB CONTENT: HOME (Daftar Pengguna Aktif & Card Profile) -->
+    <div id="tabHome" class="tab-content">
+      <div class="section-title">
+        <h3>Pengguna Aktif Saat Ini</h3>
+        <p>Hubungi pengguna lain secara langsung melalui panggilan video atau obrolan pesan.</p>
       </div>
+      <div id="activeUsersGrid" class="users-grid">
+        <!-- Card Pengguna akan di-render di sini secara dinamis -->
+      </div>
+    </div>
 
-      <!-- Area Obrolan Chat -->
-      <div class="chat-area">
-        <div class="chat-header">
-          <span id="chatHeader">Pilih pengguna untuk memulai obrolan</span>
-          <button onclick="startVideoCall()" class="btn" style="width: auto; padding: 6px 15px; font-size: 0.85rem;">Panggil VC</button>
+    <!-- TAB CONTENT: PESAN (Chat & Sidebar) -->
+    <div id="tabMessages" class="tab-content hidden">
+      <div class="app-content">
+        <!-- Sidebar User List -->
+        <div class="sidebar">
+          <h3>Daftar Obrolan</h3>
+          <ul id="userList"></ul>
         </div>
 
-        <div id="messagesContainer" class="messages-container"></div>
+        <!-- Area Obrolan Chat -->
+        <div class="chat-area">
+          <div class="chat-header">
+            <span id="chatHeader">Pilih pengguna untuk memulai obrolan</span>
+            <button onclick="startVideoCall()" class="btn" style="width: auto; padding: 6px 15px; font-size: 0.85rem;">Panggil VC</button>
+          </div>
 
-        <div class="chat-input-area">
-          <input type="file" id="photoInput" accept="image/*" style="display: none;">
-          <button type="button" class="btn-icon" onclick="document.getElementById('photoInput').click()">📷</button>
-          <input type="text" id="messageInput" placeholder="Ketik pesan...">
-          <button type="button" onclick="sendMessage()" class="btn" style="width: auto; padding: 8px 18px;">Kirim</button>
+          <div id="messagesContainer" class="messages-container"></div>
+
+          <div class="chat-input-area">
+            <input type="file" id="photoInput" accept="image/*" style="display: none;">
+            <button type="button" class="btn-icon" onclick="document.getElementById('photoInput').click()">📷</button>
+            <input type="text" id="messageInput" placeholder="Ketik pesan...">
+            <button type="button" onclick="sendMessage()" class="btn" style="width: auto; padding: 8px 18px;">Kirim</button>
+          </div>
         </div>
       </div>
     </div>
+
+    <!-- TAB CONTENT: PROFIL SAYA -->
+    <div id="tabProfile" class="tab-content hidden">
+      <div class="profile-card">
+        <h3>Profil Jati Diri Saya</h3>
+        <form id="profileForm">
+          <div class="avatar-upload-container">
+            <img id="profileAvatarPreview" src="default-avatar.png" alt="Foto Profil" class="avatar-preview">
+            <input type="file" id="avatarFileInput" accept="image/*" style="display: none;">
+            <button type="button" class="btn-secondary" onclick="document.getElementById('avatarFileInput').click()">Ganti Foto Profil</button>
+          </div>
+
+          <div class="input-group">
+            <label for="profNama">Nama Lengkap</label>
+            <input type="text" id="profNama" placeholder="Contoh: Ahmad Subagja">
+          </div>
+
+          <div class="input-group">
+            <label for="profUmur">Umur</label>
+            <input type="number" id="profUmur" placeholder="Contoh: 25">
+          </div>
+
+          <div class="input-group">
+            <label for="profPekerjaan">Pekerjaan</label>
+            <input type="text" id="profPekerjaan" placeholder="Contoh: Web Developer">
+          </div>
+
+          <div class="input-group">
+            <label for="profAlamat">Alamat</label>
+            <textarea id="profAlamat" rows="3" placeholder="Masukkan alamat lengkap..."></textarea>
+          </div>
+
+          <div class="input-group">
+            <label for="profBio">Bio / Catatan Jati Diri</label>
+            <textarea id="profBio" rows="3" placeholder="Ceritakan sedikit tentang diri Anda..."></textarea>
+          </div>
+
+          <button type="submit" class="btn">Simpan Profil</button>
+        </form>
+      </div>
+    </div>
+
   </div>
 
   <script src="app.js"></script>
