@@ -1,50 +1,29 @@
-// Inisialisasi Socket.IO Client
-const socket = io();
-
-// Global State
-let currentUser = null;
-let currentProfile = null;
+let socket;
+let currentUser = localStorage.getItem('currentUser') || null;
+let currentTargetSocketId = null;
 let localStream = null;
-let peerConnections = {}; // { socketId: RTCPeerConnection }
-let activeCallTargetSocket = null;
-let currentChatTarget = null; // null = Public Chat, String = Target Username
+let peerConnection = null;
+let activeCallTargetSocketId = null;
+let compressedPhotoBase64 = null;
 
-// WebRTC Configuration (Menggunakan Google STUN Server Free)
-const rtcConfig = {
+const rtcConfiguration = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' }
   ]
 };
 
-// Auto Check Login Session saat Halaman Dimuat
 document.addEventListener('DOMContentLoaded', () => {
-  const savedUser = localStorage.getItem('currentUser');
-  if (savedUser) {
-    currentUser = savedUser;
-    // Buka section main jika sudah login
-    showSection('mainSection');
-    socket.emit('register-user', currentUser);
-    document.getElementById('displayUsername').innerText = currentUser;
-  } else {
-    showSection('authSection');
+  socket = io();
+  setupSocketListeners();
+  setupPhotoInputListener();
+
+  if (currentUser) {
+    checkUserSession();
   }
 });
 
-// Helper Pengganti Tab / Section
-function showSection(sectionId) {
-  document.getElementById('authSection').classList.add('hidden');
-  document.getElementById('profileSection').classList.add('hidden');
-  document.getElementById('mainSection').classList.add('hidden');
-
-  const target = document.getElementById(sectionId);
-  if (target) target.classList.remove('hidden');
-}
-
-// ==========================================
-// AUTHENTICATION LOGIC (REGISTER & LOGIN)
-// ==========================================
-
+// AUTENTIKASI
 async function register() {
   const usernameInput = document.getElementById('authUsername');
   const passwordInput = document.getElementById('authPassword');
@@ -53,7 +32,7 @@ async function register() {
   const password = passwordInput ? passwordInput.value.trim() : '';
 
   if (!username || !password) {
-    alert('Harap masukkan Username dan Password!');
+    alert('Harap isi Username dan Password!');
     return;
   }
 
@@ -63,13 +42,9 @@ async function register() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password })
     });
-    const data = await res.json();
 
-    if (res.ok && data.success) {
-      alert(data.message);
-    } else {
-      alert(data.message || 'Pendaftaran gagal!');
-    }
+    const data = await res.json();
+    alert(data.message);
   } catch (err) {
     console.error('Error Register:', err);
     alert('Terjadi kesalahan koneksi ke server!');
@@ -84,7 +59,7 @@ async function login() {
   const password = passwordInput ? passwordInput.value.trim() : '';
 
   if (!username || !password) {
-    alert('Harap masukkan Username dan Password!');
+    alert('Harap isi Username dan Password!');
     return;
   }
 
@@ -94,58 +69,94 @@ async function login() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password })
     });
+
     const data = await res.json();
 
     if (res.ok && data.success) {
-      currentUser = username;
+      currentUser = data.username;
       localStorage.setItem('currentUser', currentUser);
-      socket.emit('register-user', currentUser);
-      document.getElementById('displayUsername').innerText = currentUser;
 
-      if (data.user && data.user.profile) {
-        currentProfile = data.user.profile;
-        showSection('mainSection');
+      document.getElementById('authSection').classList.add('hidden');
+
+      if (data.profile && data.profile.fullName) {
+        showMainDashboard(data.profile);
       } else {
-        showSection('profileSection');
+        document.getElementById('profileSection').classList.remove('hidden');
       }
     } else {
       alert(data.message || 'Login gagal!');
     }
   } catch (err) {
     console.error('Error Login:', err);
-    alert('Terjadi kesalahan koneksi!');
+    alert('Terjadi kesalahan koneksi ke server!');
   }
 }
 
 function logout() {
   localStorage.removeItem('currentUser');
   currentUser = null;
-  currentProfile = null;
-  if (localStream) {
-    localStream.getTracks().forEach(track => track.stop());
-  }
   location.reload();
 }
 
-// ==========================================
-// PROFILE MANAGEMENT LOGIC
-// ==========================================
+function checkUserSession() {
+  document.getElementById('authSection').classList.add('hidden');
+  showMainDashboard();
+}
 
-function editProfile() {
-  showSection('profileSection');
+// MANAGEMENT TAB NAVIGASI
+function switchTab(tabName) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+
+  const targetTab = document.getElementById(`tab-${tabName}`);
+  const targetNav = document.getElementById(`nav-${tabName}`);
+
+  if (targetTab) targetTab.classList.remove('hidden');
+  if (targetNav) targetNav.classList.add('active');
+}
+
+// PROFIL
+function setupPhotoInputListener() {
+  const photoInput = document.getElementById('profPhotoInput');
+  if (!photoInput) return;
+
+  photoInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const statusDiv = document.getElementById('uploadStatus');
+    if (statusDiv) statusDiv.innerText = 'Mengompres foto...';
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 400;
+        const scaleSize = MAX_WIDTH / img.width;
+        canvas.width = MAX_WIDTH;
+        canvas.height = img.height * scaleSize;
+
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        compressedPhotoBase64 = canvas.toDataURL('image/jpeg', 0.7);
+        if (statusDiv) statusDiv.innerText = 'Foto berhasil diproses!';
+      };
+      img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 async function saveProfile() {
   const fullName = document.getElementById('profFullName').value.trim();
   const age = document.getElementById('profAge').value.trim();
   const birthYear = document.getElementById('profBirthYear').value.trim();
-  const photoInput = document.getElementById('profPhotoInput');
 
-  let photoBase64 = currentProfile ? currentProfile.photo : null;
-
-  if (photoInput && photoInput.files && photoInput.files[0]) {
-    document.getElementById('uploadStatus').innerText = 'Memproses foto...';
-    photoBase64 = await convertFileToBase64(photoInput.files[0]);
+  if (!fullName) {
+    alert('Nama Lengkap wajib diisi!');
+    return;
   }
 
   try {
@@ -157,246 +168,254 @@ async function saveProfile() {
         fullName,
         age,
         birthYear,
-        photo: photoBase64
+        photo: compressedPhotoBase64
       })
     });
 
     const data = await res.json();
+
     if (res.ok && data.success) {
-      alert('Profil berhasil disimpan!');
-      currentProfile = data.profile;
-      showSection('mainSection');
+      alert('Profil berhasil diperbarui!');
+      document.getElementById('profileSection').classList.add('hidden');
+      showMainDashboard(data.profile);
     } else {
       alert(data.message || 'Gagal menyimpan profil.');
     }
   } catch (err) {
     console.error('Error Save Profile:', err);
-    alert('Terjadi kesalahan saat menyimpan profil.');
+    alert('Terjadi kesalahan saat menyimpan profil!');
   }
 }
 
-function convertFileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = error => reject(error);
-    reader.readAsDataURL(file);
-  });
+function editProfile() {
+  document.getElementById('mainSection').classList.add('hidden');
+  document.getElementById('profileSection').classList.remove('hidden');
 }
 
-// Google Sign-In Callback Dummy Handler
-function handleCredentialResponse(response) {
-  alert('Google Login berhasil dipicu! Menggunakan token ID.');
+// SOCKET & DASHBOARD UTAMA
+function showMainDashboard(profileData) {
+  document.getElementById('authSection').classList.add('hidden');
+  document.getElementById('profileSection').classList.add('hidden');
+  document.getElementById('mainSection').classList.remove('hidden');
+
+  document.getElementById('displayUsername').innerText = currentUser;
+  if (profileData) {
+    document.getElementById('displayFullName').innerText = profileData.fullName || currentUser;
+    if (profileData.photo) {
+      document.getElementById('myProfilePhoto').src = profileData.photo;
+    }
+  }
+
+  socket.emit('user-online', currentUser);
+  switchTab('home');
 }
 
-// ==========================================
-// REAL-TIME USER LIST & CHAT LOGIC
-// ==========================================
+function setupSocketListeners() {
+  socket.on('update-user-list', (users) => {
+    const userGrid = document.getElementById('userGrid');
+    if (!userGrid) return;
 
-socket.on('update-user-list', (users) => {
-  const userGrid = document.getElementById('userGrid');
-  if (!userGrid) return;
+    userGrid.innerHTML = '';
 
-  userGrid.innerHTML = '';
+    const otherUsers = users.filter(u => u.username !== currentUser);
 
-  users.forEach(user => {
-    if (user.username === currentUser) return; // Jangan tampilkan diri sendiri
+    if (otherUsers.length === 0) {
+      userGrid.innerHTML = `<p style="grid-column: 1/-1; text-align:center; color:#888; padding:20px;">Belum ada pengguna lain yang aktif saat ini.</p>`;
+      return;
+    }
 
-    const card = document.createElement('div');
-    card.className = 'user-card';
-    card.style.padding = '12px';
+    otherUsers.forEach(u => {
+      const card = document.createElement('div');
+      card.className = 'user-card';
 
-    const photoSrc = (user.profile && user.profile.photo) 
-      ? user.profile.photo 
-      : 'https://via.placeholder.com/80?text=User';
+      const displayName = (u.profile && u.profile.fullName) ? u.profile.fullName : u.username;
+      const photoSrc = (u.profile && u.profile.photo) ? u.profile.photo : 'https://via.placeholder.com/150';
 
-    const displayName = (user.profile && user.profile.fullName) 
-      ? user.profile.fullName 
-      : user.username;
-
-    card.innerHTML = `
-      <div style="display:flex; align-items:center; gap:12px;">
-        <img src="${photoSrc}" style="width:50px; height:50px; border-radius:50%; object-fit:cover;">
-        <div>
-          <strong style="display:block; font-size:14px;">${displayName}</strong>
-          <span style="font-size:12px; color:#2ecc71;">● Online</span>
+      card.innerHTML = `
+        <div class="user-card-img" style="background-image: url('${photoSrc}');">
+          <span class="status-badge">● Aktif</span>
         </div>
-      </div>
-      <div style="display:flex; gap:8px; margin-top:10px;">
-        <button class="btn btn-primary" style="font-size:11px; flex:1;" onclick="startVideoCall('${user.socketId}')">Panggil Video</button>
-        <button class="btn btn-secondary" style="font-size:11px; flex:1;" onclick="setPrivateChat('${user.username}')">DM Chat</button>
-      </div>
-    `;
+        <div class="user-card-info">
+          <strong>${displayName}</strong>
+          <div class="user-card-actions">
+            <button type="button" class="btn btn-primary" style="font-size:11px; padding:6px 10px;" onclick="startCall('${u.socketId}')">Panggil</button>
+            <button type="button" class="btn btn-secondary" style="font-size:11px; padding:6px 10px;" onclick="goToPrivateChat('${u.socketId}', '${displayName}')">Pesan</button>
+          </div>
+        </div>
+      `;
 
-    userGrid.appendChild(card);
+      userGrid.appendChild(card);
+    });
   });
-});
 
-function setPrivateChat(targetUsername) {
-  currentChatTarget = targetUsername;
-  document.getElementById('chatHeader').innerText = `Obrolan Privat (DM dengan ${targetUsername})`;
+  socket.on('receive-message', (data) => {
+    const chatBox = document.getElementById('chat-box');
+    if (!chatBox) return;
+
+    const msgDiv = document.createElement('div');
+    msgDiv.className = data.isPrivate ? 'msg msg-private' : 'msg';
+    
+    const prefix = data.isPrivate ? '[DM] ' : '';
+    msgDiv.innerHTML = `<strong>${prefix}${data.sender}:</strong> ${escapeHTML(data.text)}`;
+
+    chatBox.appendChild(msgDiv);
+    chatBox.scrollTop = chatBox.scrollHeight;
+  });
+
+  socket.on('incoming-call', async (data) => {
+    const accept = confirm(`Panggilan video dari ${data.callerName}. Terima?`);
+    if (accept) {
+      activeCallTargetSocketId = data.from;
+      document.getElementById('callContainer').classList.remove('hidden');
+      await setupLocalStream();
+      await createPeerConnection(data.from);
+
+      await peerConnection.setRemoteDescription(new RTCSessionDescription(data.signal));
+      const answer = await peerConnection.createAnswer();
+      await peerConnection.setLocalDescription(answer);
+
+      socket.emit('answer-call', { signal: answer, to: data.from });
+    }
+  });
+
+  socket.on('call-accepted', async (signal) => {
+    if (peerConnection) {
+      await peerConnection.setRemoteDescription(new RTCSessionDescription(signal));
+    }
+  });
+
+  socket.on('ice-candidate', async (data) => {
+    if (peerConnection && data.candidate) {
+      try {
+        await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+      } catch (e) {
+        console.error('Error ICE candidate', e);
+      }
+    }
+  });
+
+  socket.on('call-ended', () => {
+    alert('Panggilan diakhiri.');
+    closeCallUI();
+  });
+}
+
+// LOGIKA CHAT & ALIH TAB PESAN AUTOMATIS
+function goToPrivateChat(socketId, name) {
+  setPrivateChatTarget(socketId, name);
+  switchTab('chat');
+}
+
+function setPrivateChatTarget(socketId, name) {
+  currentTargetSocketId = socketId;
+  document.getElementById('chatHeader').innerText = `Obrolan Privat dengan: ${name}`;
   document.getElementById('btnResetChatTarget').classList.remove('hidden');
 }
 
 function resetChatTarget() {
-  currentChatTarget = null;
+  currentTargetSocketId = null;
   document.getElementById('chatHeader').innerText = 'Obrolan Teks (Publik)';
   document.getElementById('btnResetChatTarget').classList.add('hidden');
 }
 
 function sendChatMessage() {
-  const msgInput = document.getElementById('msgInput');
-  const message = msgInput.value.trim();
-  if (!message) return;
+  const input = document.getElementById('msgInput');
+  const text = input ? input.value.trim() : '';
+  if (!text) return;
 
-  socket.emit('send-chat', {
-    targetUser: currentChatTarget,
-    message: message
+  socket.emit('send-message', {
+    sender: currentUser,
+    text: text,
+    targetSocketId: currentTargetSocketId
   });
 
-  msgInput.value = '';
+  input.value = '';
 }
 
-socket.on('receive-chat', (data) => {
-  const chatBox = document.getElementById('chat-box');
-  if (!chatBox) return;
-
-  const msgDiv = document.createElement('div');
-  msgDiv.className = data.isPrivate ? 'msg msg-private' : 'msg';
-  msgDiv.innerHTML = `<strong>${data.sender}:</strong> ${escapeHTML(data.message)}`;
-
-  chatBox.appendChild(msgDiv);
-  chatBox.scrollTop = chatBox.scrollHeight;
-});
-
-function escapeHTML(str) {
-  return str.replace(/[&<>'"]/g, 
-    tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
-  );
-}
-
-// ==========================================
-// WEBRTC VIDEO CALL LOGIC
-// ==========================================
-
-async function initLocalStream() {
+// WEBRTC VIDEO CALL
+async function setupLocalStream() {
   if (!localStream) {
     try {
       localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       const localVideo = document.getElementById('localVideo');
       if (localVideo) localVideo.srcObject = localStream;
     } catch (err) {
-      console.error('Gagal mengakses kamera/mikrofon:', err);
-      alert('Izinkan akses kamera dan mikrofon pada browser Anda!');
-      throw err;
+      console.error('Gagal media:', err);
+      alert('Tidak dapat mengakses kamera/mikrofon!');
     }
   }
 }
 
-async function startVideoCall(targetSocketId) {
-  try {
-    await initLocalStream();
-    document.getElementById('callContainer').classList.remove('hidden');
-    activeCallTargetSocket = targetSocketId;
+async function createPeerConnection(targetSocketId) {
+  peerConnection = new RTCPeerConnection(rtcConfiguration);
 
-    const pc = createPeerConnection(targetSocketId);
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-
-    socket.emit('call-user', {
-      offer: offer,
-      userToCall: targetSocketId
-    });
-  } catch (err) {
-    console.error('Gagal membuat panggilan:', err);
+  if (localStream) {
+    localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
   }
-}
 
-socket.on('call-made', async (data) => {
-  const confirmCall = confirm(`Panggilan video masuk dari ${data.fromUser}. Terima?`);
-  if (!confirmCall) return;
-
-  try {
-    await initLocalStream();
-    document.getElementById('callContainer').classList.remove('hidden');
-    activeCallTargetSocket = data.socket;
-
-    const pc = createPeerConnection(data.socket);
-    await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
-
-    const answer = await pc.createAnswer();
-    await pc.setLocalDescription(answer);
-
-    socket.emit('make-answer', {
-      answer: answer,
-      to: data.socket
-    });
-  } catch (err) {
-    console.error('Gagal menerima panggilan:', err);
-  }
-});
-
-socket.on('answer-made', async (data) => {
-  const pc = peerConnections[data.socket];
-  if (pc) {
-    await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
-  }
-});
-
-socket.on('ice-candidate', async (data) => {
-  const pc = peerConnections[data.from];
-  if (pc && data.candidate) {
-    try {
-      await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
-    } catch (e) {
-      console.error('Error ICE Candidate:', e);
-    }
-  }
-});
-
-socket.on('call-ended', () => {
-  alert('Panggilan video telah diakhiri.');
-  endCallUI();
-});
-
-function createPeerConnection(socketId) {
-  if (peerConnections[socketId]) return peerConnections[socketId];
-
-  const pc = new RTCPeerConnection(rtcConfig);
-  peerConnections[socketId] = pc;
-
-  // Add Local Tracks to PC
-  localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-
-  // Handle Remote Stream
-  pc.ontrack = (event) => {
-    let remoteCard = document.getElementById(`card-${socketId}`);
-    if (!remoteCard) {
-      const videoGrid = document.getElementById('videoGrid');
-      remoteCard = document.createElement('div');
-      remoteCard.className = 'video-card';
-      remoteCard.id = `card-${socketId}`;
-      remoteCard.innerHTML = `
-        <video id="video-${socketId}" autoplay playsinline></video>
+  peerConnection.ontrack = (event) => {
+    let remoteVideoCard = document.getElementById('card-remote');
+    if (!remoteVideoCard) {
+      remoteVideoCard = document.createElement('div');
+      remoteVideoCard.className = 'video-card';
+      remoteVideoCard.id = 'card-remote';
+      remoteVideoCard.innerHTML = `
+        <video id="remoteVideo" autoplay playsinline></video>
         <div class="video-label">Lawan Bicara</div>
       `;
-      videoGrid.appendChild(remoteCard);
+      document.getElementById('videoGrid').appendChild(remoteVideoCard);
     }
-    const remoteVideo = document.getElementById(`video-${socketId}`);
+    const remoteVideo = document.getElementById('remoteVideo');
     if (remoteVideo) remoteVideo.srcObject = event.streams[0];
   };
 
-  // ICE Candidate Transmission
-  pc.onicecandidate = (event) => {
+  peerConnection.onicecandidate = (event) => {
     if (event.candidate) {
       socket.emit('ice-candidate', {
-        to: socketId,
-        candidate: event.candidate
+        candidate: event.candidate,
+        to: targetSocketId
       });
     }
   };
+}
 
-  return pc;
+async function startCall(targetSocketId) {
+  activeCallTargetSocketId = targetSocketId;
+  document.getElementById('callContainer').classList.remove('hidden');
+
+  await setupLocalStream();
+  await createPeerConnection(targetSocketId);
+
+  const offer = await peerConnection.createOffer();
+  await peerConnection.setLocalDescription(offer);
+
+  socket.emit('call-user', {
+    userToCall: targetSocketId,
+    signalData: offer,
+    callerName: currentUser
+  });
+}
+
+function endCall() {
+  if (activeCallTargetSocketId) {
+    socket.emit('end-call', { to: activeCallTargetSocketId });
+  }
+  closeCallUI();
+}
+
+function closeCallUI() {
+  if (peerConnection) {
+    peerConnection.close();
+    peerConnection = null;
+  }
+  if (localStream) {
+    localStream.getTracks().forEach(track => track.stop());
+    localStream = null;
+  }
+  const remoteCard = document.getElementById('card-remote');
+  if (remoteCard) remoteCard.remove();
+
+  document.getElementById('callContainer').classList.add('hidden');
 }
 
 function toggleMic() {
@@ -419,25 +438,8 @@ function toggleCam() {
   }
 }
 
-function endCall() {
-  if (activeCallTargetSocket) {
-    socket.emit('end-call', { to: activeCallTargetSocket });
-  }
-  endCallUI();
-}
-
-function endCallUI() {
-  for (const sId in peerConnections) {
-    peerConnections[sId].close();
-  }
-  peerConnections = {};
-
-  const videoGrid = document.getElementById('videoGrid');
-  const cards = videoGrid.querySelectorAll('.video-card');
-  cards.forEach(card => {
-    if (card.id !== 'card-local') card.remove();
-  });
-
-  document.getElementById('callContainer').classList.add('hidden');
-  activeCallTargetSocket = null;
+function escapeHTML(str) {
+  return str.replace(/[&<>'"]/g, 
+    tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
+  );
 }
