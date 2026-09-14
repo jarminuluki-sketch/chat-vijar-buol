@@ -1,4 +1,6 @@
-/* --- 1. RESET & VARIABLE STYLES --- */
+/* ==========================================================================
+   1. RESET & GLOBAL VARIABLES
+   ========================================================================== */
 :root {
   --primary-color: #00a8ff;
   --primary-hover: #0097e6;
@@ -7,14 +9,15 @@
   --text-color: #2f3640;
   --text-muted: #718093;
   --border-color: #dcdde1;
-  --radius: 12px;
+  --radius: 14px;
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
 }
 
 * {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
 }
 
 body {
@@ -27,19 +30,23 @@ body {
   color: var(--text-color);
 }
 
-/* --- 2. GLOBAL UTILITY (PENTING) --- */
+/* ==========================================================================
+   2. GLOBAL UTILITIES (PENTING UNTUK VISIBILITAS SCREEN)
+   ========================================================================== */
 .hidden {
   display: none !important;
 }
 
-/* --- 3. CARD & CONTAINER STYLES --- */
+/* ==========================================================================
+   3. CARD & CONTAINER STYLES (WELCOME & AUTH)
+   ========================================================================== */
 .card {
   background: var(--card-bg);
   width: 100%;
   max-width: 420px;
   border-radius: var(--radius);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-  padding: 25px;
+  box-shadow: var(--shadow);
+  padding: 30px;
   text-align: center;
   position: relative;
   z-index: 5;
@@ -47,18 +54,27 @@ body {
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(15px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(15px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-/* --- 4. WELCOME SECTION & VIDEO BANNER --- */
+/* ==========================================================================
+   4. WELCOME SECTION & VIDEO BANNER
+   ========================================================================== */
 .welcome-banner {
   width: 100%;
   border-radius: 10px;
   overflow: hidden;
   margin-bottom: 20px;
-  background-color: #000;
+  background-color: #000000;
   max-height: 220px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .welcome-img {
@@ -79,10 +95,12 @@ body {
   font-size: 0.95rem;
   color: var(--text-muted);
   line-height: 1.5;
-  margin-bottom: 20px;
+  margin-bottom: 25px;
 }
 
-/* --- 5. BUTTON STYLES --- */
+/* ==========================================================================
+   5. BUTTON STYLES
+   ========================================================================== */
 .btn {
   width: 100%;
   padding: 12px 20px;
@@ -96,6 +114,8 @@ body {
   transition: background-color 0.2s ease, transform 0.1s ease;
   position: relative;
   z-index: 10;
+  display: inline-block;
+  text-align: center;
 }
 
 .btn:hover {
@@ -106,41 +126,49 @@ body {
   transform: scale(0.98);
 }
 
-/* --- 6. AUTH SECTION (LOGIN / REGISTER) --- */
+/* ==========================================================================
+   6. AUTH SECTION (LOGIN / REGISTER)
+   ========================================================================== */
+#authSection {
+  display: block;
+}
+
 #authTitle {
   margin-bottom: 20px;
   font-size: 1.4rem;
+  color: #1e272e;
 }
 
 .input-group {
   text-align: left;
-  margin-bottom: 15px;
+  margin-bottom: 18px;
 }
 
 .input-group label {
   display: block;
   font-size: 0.85rem;
   font-weight: 600;
-  margin-bottom: 5px;
+  margin-bottom: 6px;
   color: var(--text-muted);
 }
 
 .input-group input {
   width: 100%;
-  padding: 10px 14px;
+  padding: 11px 14px;
   border: 1px solid var(--border-color);
   border-radius: 8px;
   font-size: 0.95rem;
   outline: none;
-  transition: border-color 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .input-group input:focus {
   border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(0, 168, 255, 0.2);
 }
 
 .toggle-text {
-  margin-top: 15px;
+  margin-top: 20px;
   font-size: 0.85rem;
   color: var(--text-muted);
 }
@@ -155,15 +183,47 @@ body {
   text-decoration: underline;
 }
 
-/* --- 7. APP SECTION (CHAT & VIDEO CALL LAYOUT) --- */
+/* ==========================================================================
+   7. MAIN APP SECTION (CHAT & VIDEO CALL DASHBOARD)
+   ========================================================================== */
 #appSection {
   width: 100%;
-  max-width: 900px;
+  max-width: 960px;
   background: var(--card-bg);
   border-radius: var(--radius);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow);
   display: flex;
-  height: 80vh;
+  flex-direction: column;
+  height: 85vh;
+  overflow: hidden;
+  animation: fadeIn 0.4s ease-in-out;
+}
+
+/* Area Video Stream Call */
+.video-container {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  background: #1e272e;
+  justify-content: center;
+  align-items: center;
+  min-height: 180px;
+}
+
+video.video-stream {
+  width: 49%;
+  height: 170px;
+  background: #000000;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 2px solid #354b60;
+}
+
+/* Inner Layout: Sidebar & Chat Area */
+.app-content {
+  display: flex;
+  flex: 1;
+  height: calc(100% - 194px);
   overflow: hidden;
 }
 
@@ -177,8 +237,9 @@ body {
 }
 
 .sidebar h3 {
-  font-size: 1.1rem;
-  margin-bottom: 15px;
+  font-size: 1.05rem;
+  margin-bottom: 12px;
+  color: #2f3640;
 }
 
 #userList {
@@ -186,19 +247,21 @@ body {
 }
 
 #userList li {
-  padding: 10px 12px;
+  padding: 12px;
   border-radius: 8px;
   cursor: pointer;
-  margin-bottom: 5px;
+  margin-bottom: 8px;
   background: #ffffff;
   border: 1px solid var(--border-color);
   font-size: 0.9rem;
-  transition: background 0.2s ease;
+  font-weight: 500;
+  transition: all 0.2s ease;
 }
 
 #userList li:hover {
-  background: #e1b12c;
-  color: #fff;
+  background: var(--primary-color);
+  color: #ffffff;
+  border-color: var(--primary-color);
 }
 
 /* Chat Container Area */
@@ -206,74 +269,110 @@ body {
   width: 70%;
   display: flex;
   flex-direction: column;
+  background: #ffffff;
 }
 
 .chat-header {
-  padding: 15px;
+  padding: 15px 20px;
   border-bottom: 1px solid var(--border-color);
   font-weight: 600;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  background: #ffffff;
 }
 
 .messages-container {
   flex: 1;
-  padding: 15px;
+  padding: 20px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
+  background: #f5f6fa;
 }
 
 .message {
   max-width: 70%;
-  padding: 8px 12px;
+  padding: 10px 14px;
   border-radius: 12px;
   font-size: 0.9rem;
   line-height: 1.4;
+  word-wrap: break-word;
 }
 
 .message.incoming {
   align-self: flex-start;
-  background: #f1f2f6;
+  background: #ffffff;
   color: #2f3640;
+  border: 1px solid var(--border-color);
+  border-bottom-left-radius: 2px;
 }
 
 .message.outgoing {
   align-self: flex-end;
   background: var(--primary-color);
   color: #ffffff;
+  border-bottom-right-radius: 2px;
 }
 
 .chat-input-area {
-  padding: 15px;
+  padding: 15px 20px;
   border-top: 1px solid var(--border-color);
   display: flex;
   gap: 10px;
+  align-items: center;
+  background: #ffffff;
 }
 
 .chat-input-area input[type="text"] {
   flex: 1;
-  padding: 10px;
+  padding: 10px 16px;
   border: 1px solid var(--border-color);
   border-radius: 20px;
   outline: none;
+  font-size: 0.95rem;
 }
 
-/* --- 8. VIDEO CALL OVERLAY --- */
-.video-container {
-  display: flex;
-  gap: 10px;
-  padding: 10px;
-  background: #1e272e;
-  justify-content: center;
+.chat-input-area input[type="text"]:focus {
+  border-color: var(--primary-color);
 }
 
-video.video-stream {
-  width: 48%;
-  max-height: 200px;
-  background: #000;
-  border-radius: 8px;
-  object-fit: cover;
+.btn-icon {
+  background: #f1f2f6;
+  border: 1px solid var(--border-color);
+  padding: 8px 12px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 1.1rem;
+  transition: background 0.2s ease;
+}
+
+.btn-icon:hover {
+  background: #eccc68;
+}
+
+/* ==========================================================================
+   8. RESPONSIVE DESIGN (HP & TABLET)
+   ========================================================================== */
+@media (max-width: 768px) {
+  body {
+    padding: 10px;
+  }
+
+  #appSection {
+    height: 95vh;
+  }
+
+  .sidebar {
+    width: 35%;
+  }
+
+  .chat-area {
+    width: 65%;
+  }
+
+  video.video-stream {
+    height: 120px;
+  }
 }
