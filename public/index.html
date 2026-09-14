@@ -48,6 +48,40 @@
     </p>
   </div>
 
+  <!-- 3. MAIN APP SECTION (CHAT & VIDEO CALL) -->
+  <div id="appSection" class="hidden">
+    <!-- Area Video Call -->
+    <div class="video-container">
+      <video id="localVideo" class="video-stream" autoplay playsinline muted></video>
+      <video id="remoteVideo" class="video-stream" autoplay playsinline></video>
+    </div>
+
+    <div style="display: flex; flex: 1; height: calc(100% - 210px);">
+      <!-- Sidebar User List -->
+      <div class="sidebar">
+        <h3>Daftar Pengguna</h3>
+        <ul id="userList"></ul>
+      </div>
+
+      <!-- Area Obrolan Chat -->
+      <div class="chat-area">
+        <div class="chat-header">
+          <span id="chatHeader">Pilih pengguna untuk memulai obrolan</span>
+          <button onclick="startVideoCall()" class="btn" style="width: auto; padding: 6px 15px; font-size: 0.85rem;">Panggil VC</button>
+        </div>
+
+        <div id="messagesContainer" class="messages-container"></div>
+
+        <div class="chat-input-area">
+          <input type="file" id="photoInput" accept="image/*" style="display: none;">
+          <button type="button" onclick="document.getElementById('photoInput').click()" style="padding: 0 10px; cursor: pointer;">📷</button>
+          <input type="text" id="messageInput" placeholder="Ketik pesan...">
+          <button type="button" onclick="sendMessage()" class="btn" style="width: auto; padding: 8px 18px;">Kirim</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="app.js"></script>
 </body>
 </html>
