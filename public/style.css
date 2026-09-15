@@ -155,6 +155,15 @@ body {
   color: white;
 }
 
+.btn-logout {
+  background-color: #dc3545 !important;
+  color: white !important;
+}
+
+.btn-logout:hover {
+  background-color: #c82333 !important;
+}
+
 /* VIDEO CONTAINER */
 .video-container {
   background: #111;
