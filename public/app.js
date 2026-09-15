@@ -30,7 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const authSection = document.getElementById('authSection');
   const appSection = document.getElementById('appSection');
 
-  // Hapus data login lama agar selalu dari Welcome Screen
+  // Clear session storage saat pertama dibuka
   localStorage.removeItem('currentUser');
 
   if (welcomeSection) welcomeSection.classList.remove('hidden');
@@ -45,7 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // LOGIKA NAVIGASI TAB MENU (Home, Pesan, Saya)
+  // NAVIGASI TAB MENU & LOGOUT
   setupNavigation();
 
   // LOGIKA AUTH FORM
@@ -98,15 +98,19 @@ document.addEventListener('DOMContentLoaded', () => {
   setupProfileForm();
 });
 
-// --- NAVIGASI TAB ---
+// --- NAVIGASI TAB & LOGOUT ---
 function setupNavigation() {
   const navHome = document.getElementById('navHome');
   const navMessages = document.getElementById('navMessages');
   const navProfile = document.getElementById('navProfile');
+  const btnLogout = document.getElementById('btnLogout');
 
   const tabHome = document.getElementById('tabHome');
   const tabMessages = document.getElementById('tabMessages');
   const tabProfile = document.getElementById('tabProfile');
+
+  const welcomeSection = document.getElementById('welcomeSection');
+  const appSection = document.getElementById('appSection');
 
   function switchTab(activeBtn, activeTab) {
     [navHome, navMessages, navProfile].forEach(btn => btn.classList.remove('active'));
@@ -119,6 +123,37 @@ function setupNavigation() {
   navHome.addEventListener('click', () => switchTab(navHome, tabHome));
   navMessages.addEventListener('click', () => switchTab(navMessages, tabMessages));
   navProfile.addEventListener('click', () => switchTab(navProfile, tabProfile));
+
+  // EVENT TOMBOL LOGOUT
+  if (btnLogout) {
+    btnLogout.addEventListener('click', () => {
+      if (confirm('Apakah Anda yakin ingin keluar?')) {
+        // Stop Video Stream jika sedang VC
+        closeVideoCall();
+
+        // Disconnect Socket
+        if (socket) {
+          socket.disconnect();
+        }
+
+        // Reset variabel lokal
+        currentUser = null;
+        currentTargetSocketId = null;
+        localStorage.removeItem('currentUser');
+
+        // Reset Form
+        const authForm = document.getElementById('authForm');
+        if (authForm) authForm.reset();
+
+        // Kembalikan ke Welcome Screen
+        appSection.classList.add('hidden');
+        welcomeSection.classList.remove('hidden');
+
+        // Tab default balik ke Home
+        switchTab(navHome, tabHome);
+      }
+    });
+  }
 }
 
 // --- LOGIKA FORM PROFIL SAYA ---
