@@ -8,12 +8,11 @@ const io = new Server(server);
 
 app.use(express.static('public'));
 
-let activeUsers = {}; // Object untuk menyimpan user yang terkoneksi
+let activeUsers = {};
 
 io.on('connection', (socket) => {
   console.log('User terhubung:', socket.id);
 
-  // Registrasi user dengan data profil
   socket.on('register-user', (data) => {
     let username = typeof data === 'string' ? data : data.username;
     let profile = typeof data === 'object' && data.profile ? data.profile : {};
@@ -27,7 +26,6 @@ io.on('connection', (socket) => {
     io.emit('update-user-list', Object.values(activeUsers));
   });
 
-  // Update profil real-time
   socket.on('update-profile', (profileData) => {
     if (activeUsers[socket.id]) {
       activeUsers[socket.id].profile = profileData;
@@ -35,12 +33,10 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Kirim pesan privat
   socket.on('private-message', (data) => {
     io.to(data.to).emit('private-message', data);
   });
 
-  // Signaling WebRTC
   socket.on('call-offer', (data) => {
     io.to(data.to).emit('call-offer', data);
   });
